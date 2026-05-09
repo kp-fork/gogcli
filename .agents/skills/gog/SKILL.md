@@ -34,6 +34,9 @@ stay on stderr; stdout is for data.
 - Do not store `GOG_KEYRING_PASSWORD` in a shell profile or plaintext project
   file. If the file keyring cannot unlock non-interactively, stop and ask for a
   safer setup.
+- In headless/service agents, verify the service environment, not just the login
+  shell. `GOG_KEYRING_BACKEND=file`, `GOG_KEYRING_PASSWORD`, and `HOME` must be
+  present in the process that launches `gog`.
 - Use `--no-input` in automation so auth/keyring prompts fail clearly.
 - Use `--dry-run` first where commands support it.
 - Destructive commands require `--force`; do not add it unless the user asked
@@ -68,6 +71,17 @@ gog auth remove user@example.com
 Use narrow services and `--readonly` when the task only reads. Service accounts
 are Workspace-only and mainly fit Admin, Groups, Keep, and domain-wide
 delegation flows; they do not solve consumer `@gmail.com` OAuth.
+
+For OpenClaw/systemd setups, run the diagnostic through the actual agent
+entrypoint after restarting the service:
+
+```bash
+openclaw agent --agent main --message \
+  'Run: gog auth doctor --check --no-input && gog gmail search "newer_than:1d" --max 1 --json'
+```
+
+If this fails with `keyring.password` while the same `gog auth doctor` works in
+the shell, fix the service or agent environment before reauthenticating.
 
 ## Common Reads
 
