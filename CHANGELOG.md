@@ -14,6 +14,7 @@
 
 ### Fixed
 
+- Calendar: make `calendar update --with-meet` idempotent when an event already has conference data, add explicit `--regenerate-meet`, and show `recurringEventId` in plain event output. (#576 / #573) — thanks @alexisperumal and @NodeJSmith.
 - Release: fail closed when macOS signing secrets are missing and verify Darwin release assets are not ad-hoc signed, so Homebrew upgrades keep stable Keychain trust. (#569) — thanks @aaroneden.
 - Auth: list one row per OAuth client when the same account is authorized under multiple clients, and let `auth list --client` filter that token bucket. (#563) — thanks @UnPractical91.
 - Docs: clarify how to pass file-keyring environment into headless OpenClaw/systemd agent processes. (#566) — thanks @chsbusch-dot.
