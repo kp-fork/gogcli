@@ -252,6 +252,7 @@ type driveTreeItem struct {
 	MimeType     string   `json:"mimeType"`
 	Size         int64    `json:"size,omitempty"`
 	ModifiedTime string   `json:"modifiedTime,omitempty"`
+	WebViewLink  string   `json:"webViewLink,omitempty"`
 	Owners       []string `json:"owners,omitempty"`
 	MD5          string   `json:"md5,omitempty"`
 	Depth        int      `json:"depth"`
@@ -317,6 +318,7 @@ func listDriveTree(ctx context.Context, svc *drive.Service, opts driveTreeOption
 				MimeType:     child.MimeType,
 				Size:         child.Size,
 				ModifiedTime: child.ModifiedTime,
+				WebViewLink:  child.WebViewLink,
 				Owners:       driveOwners(child),
 				MD5:          child.Md5Checksum,
 				Depth:        depth,

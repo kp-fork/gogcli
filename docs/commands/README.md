@@ -2,7 +2,7 @@
 
 Every `gog` command has a generated docs page. The source of truth is the live CLI schema; run `make docs-commands` after changing command names, flags, help text, aliases, or arguments.
 
-Generated pages: 523.
+Generated pages: 538.
 
 ## Top-level Commands
 
@@ -29,10 +29,12 @@ Generated pages: 523.
 - [gog login](gog-login.md) - Authorize and store a refresh token (alias for 'auth add')
 - [gog logout](gog-logout.md) - Remove a stored refresh token (alias for 'auth remove')
 - [gog ls](gog-ls.md) - List Drive files (alias for 'drive ls')
+- [gog maps](gog-maps.md) - Google Maps
 - [gog me](gog-me.md) - Show your profile (alias for 'people me')
 - [gog meet](gog-meet.md) - Google Meet
 - [gog open](gog-open.md) - Print a best-effort web URL for a Google URL/ID (offline)
 - [gog people](gog-people.md) - Google People
+- [gog photos](gog-photos.md) - Google Photos Library API (app-created media)
 - [gog schema](gog-schema.md) - Machine-readable command/flag schema
 - [gog search](gog-search.md) - Search Drive files (alias for 'drive search')
 - [gog searchconsole](gog-searchconsole.md) - Google Search Console
@@ -50,7 +52,7 @@ Generated pages: 523.
 
 ## All Commands
 
-- [gog](gog.md) - Google CLI for Gmail/Calendar/Chat/Classroom/Drive/Contacts/Tasks/Sheets/Docs/Slides/People/Forms/Meet/App Script/Analytics/Search Console/Ads/Groups/Admin/Keep/YouTube
+- [gog](gog.md) - Google CLI for Gmail/Calendar/Chat/Classroom/Drive/Contacts/Tasks/Sheets/Docs/Slides/People/Forms/Meet/App Script/Analytics/Search Console/Ads/Groups/Admin/Keep/YouTube/Maps/Photos
   - [gog admin](gog-admin.md) - Google Workspace Admin (Directory API) - requires domain-wide delegation
     - [gog admin groups](gog-admin-groups.md) - Manage Workspace groups
       - [gog admin groups list](gog-admin-groups-list.md) - List groups in a domain
@@ -122,6 +124,7 @@ Generated pages: 523.
       - [gog calendar alias list](gog-calendar-alias-list.md) - List calendar aliases
       - [gog calendar alias set](gog-calendar-alias-set.md) - Set a calendar alias
       - [gog calendar alias unset](gog-calendar-alias-unset.md) - Remove a calendar alias
+    - [gog calendar appointments](gog-calendar-appointments.md) - List appointment schedule events
     - [gog calendar calendars](gog-calendar-calendars.md) - List calendars
     - [gog calendar colors](gog-calendar-colors.md) - Show calendar colors
     - [gog calendar conflicts](gog-calendar-conflicts.md) - Find conflicts
@@ -295,6 +298,8 @@ Generated pages: 523.
   - [gog drive](gog-drive.md) - Google Drive
     - [gog drive activity](gog-drive-activity.md) - Query Drive Activity audit events
       - [gog drive activity query](gog-drive-activity-query.md) - Query Drive Activity API v2
+    - [gog drive audit](gog-drive-audit.md) - Audit Drive sharing without mutation
+      - [gog drive audit sharing](gog-drive-audit-sharing.md) - Find public or external Drive permissions
     - [gog drive changes](gog-drive-changes.md) - Track Drive changes for sync and automation
       - [gog drive changes list](gog-drive-changes-list.md) - List Drive changes since a page token
       - [gog drive changes start-token](gog-drive-changes-start-token.md) - Get a Drive changes start page token
@@ -314,6 +319,9 @@ Generated pages: 523.
     - [gog drive du](gog-drive-du.md) - Summarize Drive folder sizes
     - [gog drive get](gog-drive-get.md) - Get file metadata
     - [gog drive inventory](gog-drive-inventory.md) - Export a read-only Drive inventory
+    - [gog drive labels](gog-drive-labels.md) - Read Drive label schemas
+      - [gog drive labels get](gog-drive-labels-get.md) - Get a Drive label schema
+      - [gog drive labels list](gog-drive-labels-list.md) - List Drive label schemas
     - [gog drive ls](gog-drive-ls.md) - List files in a folder (default: root)
     - [gog drive mkdir](gog-drive-mkdir.md) - Create a folder
     - [gog drive move](gog-drive-move.md) - Move a file to a different folder
@@ -438,6 +446,10 @@ Generated pages: 523.
   - [gog login](gog-login.md) - Authorize and store a refresh token (alias for 'auth add')
   - [gog logout](gog-logout.md) - Remove a stored refresh token (alias for 'auth remove')
   - [gog ls](gog-ls.md) - List Drive files (alias for 'drive ls')
+  - [gog maps](gog-maps.md) - Google Maps
+    - [gog maps places](gog-maps-places.md) - Google Maps Places API
+      - [gog maps places details](gog-maps-places-details.md) - Get Place details
+      - [gog maps places search](gog-maps-places-search.md) - Search Places by text
   - [gog me](gog-me.md) - Show your profile (alias for 'people me')
   - [gog meet](gog-meet.md) - Google Meet
     - [gog meet create](gog-meet-create.md) - Create a meeting space
@@ -453,6 +465,11 @@ Generated pages: 523.
     - [gog people raw](gog-people-raw.md) - Dump raw People API response as JSON (People.Get; lossless; for scripting and LLM consumption)
     - [gog people relations](gog-people-relations.md) - Get user relations
     - [gog people search](gog-people-search.md) - Search the Workspace directory
+  - [gog photos](gog-photos.md) - Google Photos Library API (app-created media)
+    - [gog photos download](gog-photos-download.md) - Download an app-created media item
+    - [gog photos get](gog-photos-get.md) - Get an app-created media item
+    - [gog photos list](gog-photos-list.md) - List app-created media items
+    - [gog photos search](gog-photos-search.md) - Search app-created media items
   - [gog schema](gog-schema.md) - Machine-readable command/flag schema
   - [gog search](gog-search.md) - Search Drive files (alias for 'drive search')
   - [gog searchconsole](gog-searchconsole.md) - Google Search Console

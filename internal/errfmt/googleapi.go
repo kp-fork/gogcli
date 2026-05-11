@@ -17,6 +17,7 @@ type googleAPIHint struct {
 var googleAPIHints = []googleAPIHint{
 	{API: "admin.googleapis.com", DisplayName: "Admin SDK API", Service: "admin"},
 	{API: "driveactivity.googleapis.com", DisplayName: "Drive Activity API", Service: "driveactivity"},
+	{API: "drivelabels.googleapis.com", DisplayName: "Drive Labels API", Service: "drivelabels"},
 	{API: "classroom.googleapis.com", DisplayName: "Classroom API", Service: "classroom"},
 	{API: "cloudidentity.googleapis.com", DisplayName: "Cloud Identity API", Service: "groups"},
 	{API: "docs.googleapis.com", DisplayName: "Docs API", Service: "docs"},
@@ -25,6 +26,8 @@ var googleAPIHints = []googleAPIHint{
 	{API: "gmail.googleapis.com", DisplayName: "Gmail API", Service: "gmail"},
 	{API: "keep.googleapis.com", DisplayName: "Keep API", Service: "keep"},
 	{API: "people.googleapis.com", DisplayName: "People API", Service: "contacts"},
+	{API: "photoslibrary.googleapis.com", DisplayName: "Photos Library API", Service: "photos"},
+	{API: "places.googleapis.com", DisplayName: "Places API", Service: "maps"},
 	{API: "script.googleapis.com", DisplayName: "Apps Script API", Service: "appscript"},
 	{API: "sheets.googleapis.com", DisplayName: "Sheets API", Service: "sheets"},
 	{API: "slides.googleapis.com", DisplayName: "Slides API", Service: "slides"},

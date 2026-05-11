@@ -9,9 +9,12 @@ Build a single, clean, modern Go CLI that talks to:
 - Google Chat API
 - Google Classroom API
 - Google Drive API
+- Google Drive Labels API
 - Google Docs API
 - Google Sheets API
 - Google Forms API
+- Google Maps Places API
+- Google Photos Library API
 - Apps Script API
 - Google Tasks API
 - Cloud Identity API (Groups)
@@ -172,7 +175,7 @@ Flag aliases:
 - `gog auth credentials list`
 - `gog auth credentials remove [<client>|all]`
 - `gog --client <name> auth credentials <credentials.json|->`
-- `gog auth add <email> [--services user|all|gmail,calendar,chat,classroom,drive,driveactivity,docs,slides,contacts,tasks,sheets,people,forms,appscript,ads,groups,keep,admin] [--readonly] [--drive-scope full|readonly|file] [--gmail-scope full|readonly] [--extra-scopes CSV] [--manual] [--remote] [--step 1|2] [--auth-url URL] [--listen-addr HOST[:PORT]] [--redirect-host HOST] [--timeout DURATION] [--force-consent]`
+- `gog auth add <email> [--services user|all|gmail,calendar,chat,classroom,drive,driveactivity,drivelabels,docs,slides,contacts,tasks,sheets,people,forms,photos,appscript,ads,groups,keep,admin] [--readonly] [--drive-scope full|readonly|file] [--gmail-scope full|readonly] [--extra-scopes CSV] [--manual] [--remote] [--step 1|2] [--auth-url URL] [--listen-addr HOST[:PORT]] [--redirect-host HOST] [--timeout DURATION] [--force-consent]`
 - `gog auth services [--markdown]`
 - `gog auth manage [--services ...] [--listen-addr HOST[:PORT]] [--redirect-host HOST]`
 - `gog auth keep <email> --key <service-account.json>` (Google Keep; Workspace only)
@@ -211,11 +214,15 @@ Flag aliases:
 - `gog drive changes watch --token TOKEN --webhook-url URL [--channel-id ID] [--channel-token TOKEN]`
 - `gog drive changes stop <channelId> <resourceId>`
 - `gog drive activity query [--file FILE_ID|--folder FOLDER_ID] [--actions edit,share] [--from RFC3339] [--to RFC3339] [--filter FILTER]`
+- `gog drive audit sharing [--file FILE_ID|--parent FOLDER_ID] [--depth N] [--max N] [--internal-domain DOMAIN] [--public-only|--external-only] [--fail-found]`
+- `gog drive labels list [--max N] [--page TOKEN] [--customer CUSTOMERS_ID] [--published-only]`
+- `gog drive labels get <labelId|labels/ID> [--view basic|full]`
 - `gog slides thumbnail <presentationId> <slideId> [--size small|medium|large] [--format png|jpeg] [--out PATH]`
 - `gog calendar calendars`
 - `gog calendar create-calendar <summary> [--description D] [--timezone TZ] [--location L]`
 - `gog calendar acl <calendarId>`
 - `gog calendar events <calendarId> [--cal ID_OR_NAME] [--calendars CSV] [--all] [--from RFC3339] [--to RFC3339] [--max N] [--page TOKEN] [--query Q] [--weekday]`
+- `gog calendar appointments [<calendarId>] [--cal ID_OR_NAME] [--calendars CSV] [--all] [--from RFC3339] [--to RFC3339] [--today|--week|--days N] [--max N] [--page TOKEN]`
 - `gog calendar event|get <calendarId> <eventId>`
 - `GOG_CALENDAR_WEEKDAY=1` defaults `--weekday` for `gog calendar events`
 - `gog calendar create <calendarId> --summary S --from DT --to DT [--start-timezone TZ] [--end-timezone TZ] [--description D] [--location L|--location-search Q|--place-id ID] [--place-language LANG] [--place-region REGION] [--attendees a@b.com,c@d.com] [--all-day] [--event-type TYPE]`
@@ -224,6 +231,12 @@ Flag aliases:
 - `gog calendar freebusy [calendarIds] [--cal ID_OR_NAME] [--calendars CSV] [--all] --from RFC3339 --to RFC3339`
 - `gog calendar conflicts [--cal ID_OR_NAME] [--calendars CSV] [--all] [--from RFC3339|date|relative] [--to RFC3339|date|relative] [--today|--week|--days N]`
 - `gog calendar respond <calendarId> <eventId> --status accepted|declined|tentative [--send-updates all|none|externalOnly]`
+- `gog maps places search <query> [--language LANG] [--region REGION] [--fields FIELD_MASK] [--max N]`
+- `gog maps places details <placeId> [--language LANG] [--region REGION] [--fields FIELD_MASK]`
+- `gog photos list [--max N] [--page TOKEN]`
+- `gog photos search [--album ALBUM_ID] [--media-type PHOTO|VIDEO|ALL_MEDIA] [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--include-archived] [--max N] [--page TOKEN]`
+- `gog photos get <mediaItemId>`
+- `gog photos download <mediaItemId> [--out PATH|-] [--video]`
 - `gog time now [--timezone TZ]`
 - `gog classroom courses [--state ...] [--max N] [--page TOKEN]`
 - `gog classroom courses get <courseId>`
@@ -404,12 +417,14 @@ We store a single refresh token per Google account email.
   - `https://www.googleapis.com/auth/chat.memberships`
   - `https://www.googleapis.com/auth/chat.users.readstate.readonly`
 - Drive: `https://www.googleapis.com/auth/drive`
+- Drive Labels: `https://www.googleapis.com/auth/drive.labels.readonly`
 - Contacts/Directory:
   - `https://www.googleapis.com/auth/contacts`
   - `https://www.googleapis.com/auth/contacts.other.readonly`
   - `https://www.googleapis.com/auth/directory.readonly`
 - People:
   - `profile` (OIDC)
+- Photos: `https://www.googleapis.com/auth/photoslibrary.readonly.appcreateddata`
 
 ## Output formats
 

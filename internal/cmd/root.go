@@ -29,7 +29,7 @@ const (
 
 type RootFlags struct {
 	Color           string `help:"Color output: auto|always|never" default:"${color}"`
-	Account         string `help:"Account email for API commands (gmail/calendar/chat/classroom/drive/docs/slides/contacts/tasks/people/sheets/forms/sites/appscript/analytics/searchconsole/ads)" aliases:"acct" short:"a"`
+	Account         string `help:"Account email for API commands (gmail/calendar/chat/classroom/drive/drivelabels/docs/slides/contacts/tasks/people/sheets/forms/sites/appscript/analytics/searchconsole/ads/photos)" aliases:"acct" short:"a"`
 	Client          string `help:"OAuth client name (selects stored credentials + token bucket)" default:"${client}"`
 	AccessToken     string `help:"Use provided access token directly (bypasses stored refresh tokens; token expires in ~1h)" env:"GOG_ACCESS_TOKEN"`
 	EnableCommands  string `help:"Comma-separated list of enabled commands; dot paths allowed (restricts CLI)" default:"${enabled_commands}"`
@@ -72,6 +72,7 @@ type CLI struct {
 	Docs          DocsCmd               `cmd:"" aliases:"doc" help:"Google Docs (export via Drive)"`
 	Slides        SlidesCmd             `cmd:"" aliases:"slide" help:"Google Slides"`
 	Calendar      CalendarCmd           `cmd:"" aliases:"cal" help:"Google Calendar"`
+	Maps          MapsCmd               `cmd:"" aliases:"map" help:"Google Maps"`
 	Classroom     ClassroomCmd          `cmd:"" aliases:"class" help:"Google Classroom"`
 	Time          TimeCmd               `cmd:"" help:"Local time utilities"`
 	Gmail         GmailCmd              `cmd:"" aliases:"mail,email" help:"Gmail"`
@@ -88,6 +89,7 @@ type CLI struct {
 	Analytics     AnalyticsCmd          `cmd:"" aliases:"ga" help:"Google Analytics"`
 	SearchConsole SearchConsoleCmd      `cmd:"" name:"searchconsole" aliases:"gsc,search-console,webmasters" help:"Google Search Console"`
 	YouTube       YouTubeCmd            `cmd:"" name:"youtube" aliases:"yt" help:"YouTube Data API (activities, videos, playlists, comments, channels)"`
+	Photos        PhotosCmd             `cmd:"" name:"photos" aliases:"photo" help:"Google Photos Library API (app-created media)"`
 	Config        ConfigCmd             `cmd:"" help:"Manage configuration"`
 	ExitCodes     AgentExitCodesCmd     `cmd:"" name:"exit-codes" aliases:"exitcodes" help:"Print stable exit codes (alias for 'agent exit-codes')"`
 	Agent         AgentCmd              `cmd:"" help:"Agent-friendly helpers"`
@@ -363,7 +365,7 @@ func newParser(description string) (*kong.Kong, *CLI, error) {
 }
 
 func baseDescription() string {
-	return "Google CLI for Gmail/Calendar/Chat/Classroom/Drive/Contacts/Tasks/Sheets/Docs/Slides/People/Forms/Meet/App Script/Analytics/Search Console/Ads/Groups/Admin/Keep/YouTube"
+	return "Google CLI for Gmail/Calendar/Chat/Classroom/Drive/Contacts/Tasks/Sheets/Docs/Slides/People/Forms/Meet/App Script/Analytics/Search Console/Ads/Groups/Admin/Keep/YouTube/Maps/Photos"
 }
 
 func helpDescription() string {

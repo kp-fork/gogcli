@@ -17,6 +17,7 @@ gog drive (drv) <command> [flags]
 ## Subcommands
 
 - [gog drive activity](gog-drive-activity.md) - Query Drive Activity audit events
+- [gog drive audit](gog-drive-audit.md) - Audit Drive sharing without mutation
 - [gog drive changes](gog-drive-changes.md) - Track Drive changes for sync and automation
 - [gog drive comments](gog-drive-comments.md) - Manage comments on files
 - [gog drive copy](gog-drive-copy.md) - Copy a file
@@ -26,6 +27,7 @@ gog drive (drv) <command> [flags]
 - [gog drive du](gog-drive-du.md) - Summarize Drive folder sizes
 - [gog drive get](gog-drive-get.md) - Get file metadata
 - [gog drive inventory](gog-drive-inventory.md) - Export a read-only Drive inventory
+- [gog drive labels](gog-drive-labels.md) - Read Drive label schemas
 - [gog drive ls](gog-drive-ls.md) - List files in a folder (default: root)
 - [gog drive mkdir](gog-drive-mkdir.md) - Create a folder
 - [gog drive move](gog-drive-move.md) - Move a file to a different folder
@@ -44,7 +46,7 @@ gog drive (drv) <command> [flags]
 | Flag | Type | Default | Help |
 | --- | --- | --- | --- |
 | `--access-token` | `string` |  | Use provided access token directly (bypasses stored refresh tokens; token expires in ~1h) |
-| `-a`<br>`--account`<br>`--acct` | `string` |  | Account email for API commands (gmail/calendar/chat/classroom/drive/docs/slides/contacts/tasks/people/sheets/forms/sites/appscript/analytics/searchconsole/ads) |
+| `-a`<br>`--account`<br>`--acct` | `string` |  | Account email for API commands (gmail/calendar/chat/classroom/drive/drivelabels/docs/slides/contacts/tasks/people/sheets/forms/sites/appscript/analytics/searchconsole/ads/photos) |
 | `--client` | `string` |  | OAuth client name (selects stored credentials + token bucket) |
 | `--color` | `string` | auto | Color output: auto\|always\|never |
 | `--disable-commands` | `string` |  | Comma-separated list of disabled commands; dot paths allowed |

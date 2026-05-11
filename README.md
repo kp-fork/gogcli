@@ -99,6 +99,8 @@ Useful Google setup links:
 - [OAuth consent screen](https://console.cloud.google.com/auth/branding)
 - [API library](https://console.cloud.google.com/apis/library)
 - [Places API (New)](https://console.cloud.google.com/apis/api/places.googleapis.com)
+- [Drive Labels API](https://console.cloud.google.com/apis/api/drivelabels.googleapis.com)
+- [Photos Library API](https://console.cloud.google.com/apis/api/photoslibrary.googleapis.com)
 - [Google Analytics Admin API](https://console.cloud.google.com/apis/api/analyticsadmin.googleapis.com)
 - [Google Analytics Data API](https://console.cloud.google.com/apis/api/analyticsdata.googleapis.com)
 - [Google Search Console API](https://console.cloud.google.com/apis/api/searchconsole.googleapis.com)
@@ -160,6 +162,7 @@ gog calendar create primary --summary "Coffee" \
   --location-search "Elysian Coffee Vancouver"
 gog calendar update primary <eventId> --with-meet
 gog calendar move primary <eventId> team-calendar@example.com
+gog calendar appointments --week --json
 ```
 
 ### Drive
@@ -174,6 +177,8 @@ Docs: [Drive audits](docs/drive-audits.md), [raw API dumps](docs/raw-api.md),
 gog drive tree --parent <folderId> --depth 2
 gog drive du --parent <folderId> --max 20 --json
 gog drive inventory --parent <folderId> --json
+gog drive audit sharing --parent <folderId> --internal-domain example.com --json
+gog drive labels list --json
 
 # Ask Drive for non-default fields.
 gog drive get <fileId> --fields 'id,name,mimeType,size,owners,emailAddress' --json
@@ -185,6 +190,26 @@ gog drive activity query --file <fileId> --actions edit,share --from 2026-01-01T
 
 # Lossless raw API JSON.
 gog drive raw <fileId> --pretty
+```
+
+### Maps
+
+Docs: [`gog maps`](docs/commands/gog-maps.md),
+[`maps places`](docs/commands/gog-maps-places.md).
+
+```bash
+gog maps places search "Elysian Coffee Vancouver" --json
+gog maps places details <placeId> --json
+```
+
+### Photos
+
+Docs: [`gog photos`](docs/commands/gog-photos.md).
+
+```bash
+gog photos list --json
+gog photos search --media-type PHOTO --from 2026-01-01 --to 2026-01-31 --json
+gog photos download <mediaItemId> --out photo.jpg
 ```
 
 ### Contacts
@@ -465,6 +490,7 @@ Generated service scope table:
 | classroom | yes | Classroom API | `https://www.googleapis.com/auth/classroom.courses`<br>`https://www.googleapis.com/auth/classroom.rosters`<br>`https://www.googleapis.com/auth/classroom.coursework.students`<br>`https://www.googleapis.com/auth/classroom.coursework.me`<br>`https://www.googleapis.com/auth/classroom.courseworkmaterials`<br>`https://www.googleapis.com/auth/classroom.announcements`<br>`https://www.googleapis.com/auth/classroom.topics`<br>`https://www.googleapis.com/auth/classroom.guardianlinks.students`<br>`https://www.googleapis.com/auth/classroom.profile.emails`<br>`https://www.googleapis.com/auth/classroom.profile.photos` |  |
 | drive | yes | Drive API | `https://www.googleapis.com/auth/drive` |  |
 | driveactivity | yes | Drive Activity API | `https://www.googleapis.com/auth/drive.activity.readonly` | Read-only audit/activity scope; authorize with --services driveactivity |
+| drivelabels | yes | Drive Labels API | `https://www.googleapis.com/auth/drive.labels.readonly` | Read-only Drive label schema; authorize with --services drivelabels |
 | docs | yes | Docs API, Drive API | `https://www.googleapis.com/auth/drive`<br>`https://www.googleapis.com/auth/documents` | Export/copy/create via Drive |
 | slides | yes | Slides API, Drive API | `https://www.googleapis.com/auth/drive`<br>`https://www.googleapis.com/auth/presentations` | Create/edit presentations |
 | contacts | yes | People API | `https://www.googleapis.com/auth/contacts`<br>`https://www.googleapis.com/auth/contacts.other.readonly`<br>`https://www.googleapis.com/auth/directory.readonly` | Contacts + other contacts + directory |
@@ -482,6 +508,7 @@ Generated service scope table:
 | keep | no | Keep API | `https://www.googleapis.com/auth/keep` | Workspace only; service account (domain-wide delegation) |
 | admin | no | Admin SDK Directory API | `https://www.googleapis.com/auth/admin.directory.user`<br>`https://www.googleapis.com/auth/admin.directory.group`<br>`https://www.googleapis.com/auth/admin.directory.group.member` | Workspace only; service account with domain-wide delegation required |
 | youtube | yes | YouTube Data API v3 | `https://www.googleapis.com/auth/youtube.readonly` | Most read operations also work with API key only (config youtube_api_key or GOG_YOUTUBE_API_KEY) |
+| photos | yes | Photos Library API | `https://www.googleapis.com/auth/photoslibrary.readonly.appcreateddata` | Read-only app-created media only after Google Photos Library API scope changes |
 <!-- auth-services:end -->
 
 Regenerate the table with:

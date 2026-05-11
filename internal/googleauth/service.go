@@ -16,6 +16,7 @@ const (
 	ServiceClassroom     Service = "classroom"
 	ServiceDrive         Service = "drive"
 	ServiceDriveActivity Service = "driveactivity"
+	ServiceDriveLabels   Service = "drivelabels"
 	ServiceDocs          Service = "docs"
 	ServiceSlides        Service = "slides"
 	ServiceContacts      Service = "contacts"
@@ -33,6 +34,7 @@ const (
 	ServiceKeep          Service = "keep"
 	ServiceAdmin         Service = "admin"
 	ServiceYouTube       Service = "youtube"
+	ServicePhotos        Service = "photos"
 )
 
 const (
@@ -83,6 +85,7 @@ var serviceOrder = []Service{
 	ServiceClassroom,
 	ServiceDrive,
 	ServiceDriveActivity,
+	ServiceDriveLabels,
 	ServiceDocs,
 	ServiceSlides,
 	ServiceContacts,
@@ -100,6 +103,7 @@ var serviceOrder = []Service{
 	ServiceKeep,
 	ServiceAdmin,
 	ServiceYouTube,
+	ServicePhotos,
 }
 
 var serviceInfoByService = map[Service]serviceInfo{
@@ -153,6 +157,12 @@ var serviceInfoByService = map[Service]serviceInfo{
 		user:   true,
 		apis:   []string{"Drive Activity API"},
 		note:   "Read-only audit/activity scope; authorize with --services driveactivity",
+	},
+	ServiceDriveLabels: {
+		scopes: []string{"https://www.googleapis.com/auth/drive.labels.readonly"},
+		user:   true,
+		apis:   []string{"Drive Labels API"},
+		note:   "Read-only Drive label schema; authorize with --services drivelabels",
 	},
 	ServiceDocs: {
 		// Docs commands are implemented via Drive APIs (export/copy/create),
@@ -283,6 +293,12 @@ var serviceInfoByService = map[Service]serviceInfo{
 		user:   true,
 		apis:   []string{"YouTube Data API v3"},
 		note:   "Most read operations also work with API key only (config youtube_api_key or GOG_YOUTUBE_API_KEY)",
+	},
+	ServicePhotos: {
+		scopes: []string{"https://www.googleapis.com/auth/photoslibrary.readonly.appcreateddata"},
+		user:   true,
+		apis:   []string{"Photos Library API"},
+		note:   "Read-only app-created media only after Google Photos Library API scope changes",
 	},
 }
 
@@ -553,6 +569,8 @@ func scopesForServiceWithOptions(service Service, opts ScopeOptions) ([]string, 
 		return []string{driveScopeValue()}, nil
 	case ServiceDriveActivity:
 		return Scopes(service)
+	case ServiceDriveLabels:
+		return Scopes(service)
 	case ServiceDocs:
 		docScope := "https://www.googleapis.com/auth/documents"
 		if opts.Readonly {
@@ -636,6 +654,8 @@ func scopesForServiceWithOptions(service Service, opts ScopeOptions) ([]string, 
 	case ServiceKeep:
 		return Scopes(service)
 	case ServiceYouTube:
+		return Scopes(service)
+	case ServicePhotos:
 		return Scopes(service)
 	default:
 		return nil, errUnknownService

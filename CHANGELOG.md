@@ -4,6 +4,12 @@
 
 ### Added
 
+- Calendar: add read-only `calendar appointments` listing for appointment schedule events via the Calendar events API. (#329)
+- Drive: add read-only `drive audit sharing` to find public and external permissions across a file or folder tree. (#336)
+- Drive: add `drive labels list|get` for read-only Drive Labels API v2 discovery. (#339)
+- Maps: add `maps places search|details` backed by the existing Places API-key configuration. (#571)
+- Photos: add read-only `photos list|search|get|download` for app-created Google Photos media. (#381)
+
 ### Fixed
 
 - YouTube: preserve API-key authentication when wrapping requests with the retry transport, so public `youtube`/`yt` reads no longer fail as unregistered callers. (#578) — thanks @adityarya24.
