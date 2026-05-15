@@ -41,7 +41,7 @@ func TestCalendarCreateCmd_ValidationErrors(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		if err := tc.cmd.Run(ctx, flags); err == nil {
+		if err := tc.cmd.Run(ctx, flags, nil); err == nil {
 			t.Fatalf("expected error for %s", tc.name)
 		}
 	}
@@ -110,7 +110,7 @@ func TestCalendarCreateCmd_WithExtras(t *testing.T) {
 		SharedProps:           []string{"s=v"},
 	}
 	out := captureStdout(t, func() {
-		if err := cmd.Run(ctx, flags); err != nil {
+		if err := cmd.Run(ctx, flags, nil); err != nil {
 			t.Fatalf("Run: %v", err)
 		}
 	})

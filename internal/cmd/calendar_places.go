@@ -25,13 +25,15 @@ type calendarPlace struct {
 	GoogleMapsURI    string
 }
 
-func (c *CalendarCreateCmd) resolvePlace(ctx context.Context) error {
+func (c *CalendarCreateCmd) resolvePlace(ctx context.Context, kctx *kong.Context) error {
 	place, err := resolveCalendarPlace(ctx, calendarPlaceLookup{
-		LocationSet:    strings.TrimSpace(c.Location) != "",
-		LocationSearch: c.LocationSearch,
-		PlaceID:        c.PlaceID,
-		LanguageCode:   c.PlaceLanguage,
-		RegionCode:     c.PlaceRegion,
+		LocationSet:       flagProvided(kctx, "location") || strings.TrimSpace(c.Location) != "",
+		LocationSearch:    c.LocationSearch,
+		LocationSearchSet: flagProvided(kctx, "location-search"),
+		PlaceID:           c.PlaceID,
+		PlaceIDSet:        flagProvided(kctx, "place-id"),
+		LanguageCode:      c.PlaceLanguage,
+		RegionCode:        c.PlaceRegion,
 	})
 	if err != nil {
 		return err
@@ -67,7 +69,35 @@ type calendarPlaceLookup struct {
 	RegionCode        string
 }
 
-func resolveCalendarPlace(ctx context.Context, lookup calendarPlaceLookup) (*calendarPlace, error) {
+type calendarPlaceLookupRequest struct {
+	Mode         string `json:"mode"`
+	Query        string `json:"query,omitempty"`
+	PlaceID      string `json:"place_id,omitempty"`
+	LanguageCode string `json:"language_code,omitempty"`
+	RegionCode   string `json:"region_code,omitempty"`
+}
+
+func (r *calendarPlaceLookupRequest) dryRunPayload() map[string]string {
+	if r == nil {
+		return nil
+	}
+	payload := map[string]string{"mode": r.Mode}
+	if r.Query != "" {
+		payload["query"] = r.Query
+	}
+	if r.PlaceID != "" {
+		payload["place_id"] = r.PlaceID
+	}
+	if r.LanguageCode != "" {
+		payload["language_code"] = r.LanguageCode
+	}
+	if r.RegionCode != "" {
+		payload["region_code"] = r.RegionCode
+	}
+	return payload
+}
+
+func validateCalendarPlaceLookup(lookup calendarPlaceLookup) (*calendarPlaceLookupRequest, error) {
 	search := strings.TrimSpace(lookup.LocationSearch)
 	placeID := strings.TrimSpace(lookup.PlaceID)
 	searchSet := lookup.LocationSearchSet || search != ""
@@ -88,6 +118,32 @@ func resolveCalendarPlace(ctx context.Context, lookup calendarPlaceLookup) (*cal
 	if search == "" && placeID == "" {
 		return nil, nil //nolint:nilnil // no lookup requested
 	}
+	request := &calendarPlaceLookupRequest{
+		LanguageCode: strings.TrimSpace(lookup.LanguageCode),
+		RegionCode:   strings.TrimSpace(lookup.RegionCode),
+	}
+	if search != "" {
+		request.Mode = "text_search"
+		request.Query = search
+	} else {
+		placeID = strings.TrimPrefix(placeID, "places/")
+		if placeID == "" {
+			return nil, usage("empty --place-id")
+		}
+		request.Mode = "details"
+		request.PlaceID = placeID
+	}
+	return request, nil
+}
+
+func resolveCalendarPlace(ctx context.Context, lookup calendarPlaceLookup) (*calendarPlace, error) {
+	request, err := validateCalendarPlaceLookup(lookup)
+	if err != nil {
+		return nil, err
+	}
+	if request == nil {
+		return nil, nil //nolint:nilnil // no lookup requested
+	}
 
 	apiKey, err := placesAPIKey()
 	if err != nil {
@@ -100,16 +156,16 @@ func resolveCalendarPlace(ctx context.Context, lookup calendarPlaceLookup) (*cal
 	}
 
 	var place *googleapi.Place
-	if search != "" {
-		place, err = client.TextSearch(ctx, search, opts)
+	if request.Query != "" {
+		place, err = client.TextSearch(ctx, request.Query, opts)
 	} else {
-		place, err = client.Details(ctx, placeID, opts)
+		place, err = client.Details(ctx, request.PlaceID, opts)
 	}
 	if err != nil {
 		return nil, err
 	}
-	if strings.TrimSpace(place.ID) == "" && placeID != "" {
-		place.ID = strings.TrimPrefix(placeID, "places/")
+	if strings.TrimSpace(place.ID) == "" && request.PlaceID != "" {
+		place.ID = request.PlaceID
 	}
 	return &calendarPlace{
 		ID:               strings.TrimSpace(place.ID),

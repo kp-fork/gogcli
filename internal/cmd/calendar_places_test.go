@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -44,6 +45,111 @@ func TestResolveCalendarPlaceValidation(t *testing.T) {
 	_, err := resolveCalendarPlace(context.Background(), calendarPlaceLookup{LocationSet: true, LocationSearch: "cafe"})
 	if err == nil || !strings.Contains(err.Error(), "cannot combine") {
 		t.Fatalf("expected conflict error, got %v", err)
+	}
+
+	_, err = validateCalendarPlaceLookup(calendarPlaceLookup{PlaceID: "places/"})
+	if err == nil || !strings.Contains(err.Error(), "empty --place-id") {
+		t.Fatalf("expected empty prefixed place id error, got %v", err)
+	}
+}
+
+func TestCalendarCreateDryRunLocationSearchSkipsPlacesAPI(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(t.TempDir(), "xdg"))
+	t.Setenv("GOG_PLACES_API_KEY", "test-key")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("dry-run must not call Places API: %s", r.URL.Path)
+	}))
+	defer srv.Close()
+	t.Setenv("GOG_PLACES_BASE_URL", srv.URL)
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{
+				"--json",
+				"--dry-run",
+				"--no-input",
+				"calendar", "create", "primary",
+				"--summary", "Coffee",
+				"--from", "2026-05-10T10:00:00Z",
+				"--to", "2026-05-10T11:00:00Z",
+				"--location-search", "Cafe",
+			}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+
+	var got struct {
+		DryRun  bool `json:"dry_run"`
+		Request struct {
+			PlaceLookup map[string]string `json:"place_lookup"`
+		} `json:"request"`
+	}
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("json parse: %v\nout=%s", err, out)
+	}
+	if !got.DryRun || got.Request.PlaceLookup["query"] != "Cafe" || got.Request.PlaceLookup["mode"] != "text_search" {
+		t.Fatalf("unexpected dry-run payload: %#v", got)
+	}
+}
+
+func TestCalendarCreateDryRunEmptyPlaceIDErrors(t *testing.T) {
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			err := Execute([]string{
+				"--json",
+				"--dry-run",
+				"--no-input",
+				"calendar", "create", "primary",
+				"--summary", "Coffee",
+				"--from", "2026-05-10T10:00:00Z",
+				"--to", "2026-05-10T11:00:00Z",
+				"--place-id", "",
+			})
+			if err == nil || !strings.Contains(err.Error(), "empty --place-id") {
+				t.Fatalf("expected empty --place-id error, got %v", err)
+			}
+		})
+	})
+	if strings.TrimSpace(out) != "" {
+		t.Fatalf("expected no dry-run output, got %q", out)
+	}
+}
+
+func TestCalendarUpdateDryRunPlaceIDSkipsPlacesAPI(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(t.TempDir(), "xdg"))
+	t.Setenv("GOG_PLACES_API_KEY", "test-key")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("dry-run must not call Places API: %s", r.URL.Path)
+	}))
+	defer srv.Close()
+	t.Setenv("GOG_PLACES_BASE_URL", srv.URL)
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{
+				"--json",
+				"--dry-run",
+				"--no-input",
+				"calendar", "update", "primary", "evt123",
+				"--place-id", "places/ChIJ123",
+			}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+
+	var got struct {
+		DryRun  bool `json:"dry_run"`
+		Request struct {
+			PlaceLookup map[string]string `json:"place_lookup"`
+		} `json:"request"`
+	}
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("json parse: %v\nout=%s", err, out)
+	}
+	if !got.DryRun || got.Request.PlaceLookup["place_id"] != "ChIJ123" || got.Request.PlaceLookup["mode"] != "details" {
+		t.Fatalf("unexpected dry-run payload: %#v", got)
 	}
 }
 

@@ -57,8 +57,42 @@ type CalendarCreateCmd struct {
 	resolvedPlace         *calendarPlace
 }
 
-func (c *CalendarCreateCmd) Run(ctx context.Context, flags *RootFlags) error {
-	if err := c.resolvePlace(ctx); err != nil {
+func (c *CalendarCreateCmd) Run(ctx context.Context, flags *RootFlags, kctx *kong.Context) error {
+	if flags != nil && flags.DryRun {
+		placeLookup, err := validateCalendarPlaceLookup(calendarPlaceLookup{
+			LocationSet:       flagProvided(kctx, "location") || strings.TrimSpace(c.Location) != "",
+			LocationSearch:    c.LocationSearch,
+			LocationSearchSet: flagProvided(kctx, "location-search"),
+			PlaceID:           c.PlaceID,
+			PlaceIDSet:        flagProvided(kctx, "place-id"),
+			LanguageCode:      c.PlaceLanguage,
+			RegionCode:        c.PlaceRegion,
+		})
+		if err != nil {
+			return err
+		}
+		plan, err := buildCalendarCreatePlan(c)
+		if err != nil {
+			return err
+		}
+		calendarID, err := prepareCalendarID(plan.CalendarID, false)
+		if err != nil {
+			return err
+		}
+		request := map[string]any{
+			"calendar_id":          calendarID,
+			"send_updates":         plan.SendUpdates,
+			"conference_version_1": plan.WithMeet,
+			"supports_attachments": len(plan.Event.Attachments) > 0,
+			"event":                plan.Event,
+		}
+		if placeLookup != nil {
+			request["place_lookup"] = placeLookup.dryRunPayload()
+		}
+		return dryRunExit(ctx, flags, "calendar.create", request)
+	}
+
+	if err := c.resolvePlace(ctx, kctx); err != nil {
 		return err
 	}
 
@@ -286,8 +320,22 @@ func (c *CalendarUpdateCmd) Run(ctx context.Context, kctx *kong.Context, flags *
 	if flagProvided(kctx, "with-meet") && flagProvided(kctx, "regenerate-meet") {
 		return usage("use only one of --with-meet or --regenerate-meet")
 	}
-	if placeErr := c.resolvePlace(ctx, kctx); placeErr != nil {
-		return placeErr
+	placeLookup, err := validateCalendarPlaceLookup(calendarPlaceLookup{
+		LocationSet:       flagProvided(kctx, "location"),
+		LocationSearch:    c.LocationSearch,
+		LocationSearchSet: flagProvided(kctx, "location-search"),
+		PlaceID:           c.PlaceID,
+		PlaceIDSet:        flagProvided(kctx, "place-id"),
+		LanguageCode:      c.PlaceLanguage,
+		RegionCode:        c.PlaceRegion,
+	})
+	if err != nil {
+		return err
+	}
+	if !(flags != nil && flags.DryRun) {
+		if placeErr := c.resolvePlace(ctx, kctx); placeErr != nil {
+			return placeErr
+		}
 	}
 
 	sendUpdates, err := validateSendUpdates(c.SendUpdates)
@@ -306,11 +354,11 @@ func (c *CalendarUpdateCmd) Run(ctx context.Context, kctx *kong.Context, flags *
 		return usage("empty --add-attendee")
 	}
 
-	if !changed && !wantsAddAttendee {
+	if !changed && !wantsAddAttendee && placeLookup == nil {
 		return usage("no updates provided")
 	}
 
-	if dryRunErr := dryRunExit(ctx, flags, "calendar.update", map[string]any{
+	request := map[string]any{
 		"calendar_id":          calendarID,
 		"event_id":             eventID,
 		"send_updates":         sendUpdates,
@@ -321,7 +369,11 @@ func (c *CalendarUpdateCmd) Run(ctx context.Context, kctx *kong.Context, flags *
 		"wants_add_attendee":   wantsAddAttendee,
 		"conference_version_1": patch.ConferenceData != nil,
 		"supports_attachments": len(patch.Attachments) > 0,
-	}); dryRunErr != nil {
+	}
+	if placeLookup != nil {
+		request["place_lookup"] = placeLookup.dryRunPayload()
+	}
+	if dryRunErr := dryRunExit(ctx, flags, "calendar.update", request); dryRunErr != nil {
 		return dryRunErr
 	}
 

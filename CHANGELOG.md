@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.17.0 - Unreleased
+## 0.17.1 - Unreleased
 
 ### Added
 
@@ -24,6 +24,7 @@
 - CLI: keep Docs tab edits, Sheets tab deletes, Drive deletes, comment deletes, auth removals, Gmail delegate/watch removals, Classroom guardian deletes, and other-contact deletes dry-run parseable without auth/API access.
 - CLI: make dry-runs for Gmail label edits, Sheets table deletes, Sheets banding/conditional clears, and Forms deletes stop before auth/API calls, and make Forms dry-runs validate choice, scale, quiz, and empty update inputs locally.
 - CLI: make dry-runs for Calendar secondary calendars, Forms create/publish/watch/move, Gmail label delete, Sheets table append/clear, Sheets named-range edits, Apps Script create, and Slides template creation stay offline before auth/API calls.
+- Calendar: keep `calendar create/update --dry-run` with `--location-search` or `--place-id` offline before Places API lookup while still validating the requested lookup.
 - CLI: make dry-runs for Admin group/user/org-unit edits, Contacts delete, Docs tab export, Drive tab download/share/unshare, and Gmail watch renew stay offline before auth/API calls; redact Admin user create passwords in dry-run output.
 - Auth: keep fresh OAuth saves working even when old file-keyring token entries are unreadable, and clarify that `--services all` means all user OAuth services while Workspace-only services use service accounts.
 - Gmail: reject off-palette `gmail labels style` colors locally instead of forwarding an opaque Gmail API error.
