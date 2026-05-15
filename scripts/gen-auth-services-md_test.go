@@ -61,6 +61,8 @@ func TestReadmeAuthServicesBlockIsFresh(t *testing.T) {
 }
 
 func authServicesBlock(content string) (string, bool) {
+	content = strings.ReplaceAll(content, "\r\n", "\n")
+
 	start := strings.Index(content, startMarker)
 	end := strings.Index(content, endMarker)
 
