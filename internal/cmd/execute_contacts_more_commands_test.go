@@ -81,6 +81,9 @@ func TestExecute_ContactsMoreCommands_JSON(t *testing.T) {
 			})
 			return
 		case strings.Contains(path, "otherContacts:search") && r.Method == http.MethodGet:
+			if got := r.URL.Query().Get("readMask"); got != contactsOtherReadMask {
+				t.Fatalf("other search readMask = %q, want %q", got, contactsOtherReadMask)
+			}
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"results": []map[string]any{
@@ -95,6 +98,9 @@ func TestExecute_ContactsMoreCommands_JSON(t *testing.T) {
 			return
 		case strings.Contains(path, "/otherContacts") && r.Method == http.MethodGet:
 			// otherContacts.list
+			if got := r.URL.Query().Get("readMask"); got != contactsOtherReadMask {
+				t.Fatalf("other list readMask = %q, want %q", got, contactsOtherReadMask)
+			}
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"otherContacts": []map[string]any{

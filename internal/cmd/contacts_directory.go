@@ -219,6 +219,8 @@ type ContactsOtherCmd struct {
 	Delete ContactsOtherDeleteCmd `cmd:"" name:"delete" help:"Delete an other contact"`
 }
 
+const contactsOtherReadMask = "names,emailAddresses,phoneNumbers"
+
 type ContactsOtherListCmd struct {
 	Max       int64  `name:"max" aliases:"limit" help:"Max results" default:"100"`
 	Page      string `name:"page" aliases:"cursor" help:"Page token"`
@@ -240,7 +242,7 @@ func (c *ContactsOtherListCmd) Run(ctx context.Context, flags *RootFlags) error 
 
 	fetch := func(pageToken string) ([]*people.Person, string, error) {
 		call := svc.OtherContacts.List().
-			ReadMask(contactsReadMask).
+			ReadMask(contactsOtherReadMask).
 			PageSize(c.Max).
 			Context(ctx)
 		if strings.TrimSpace(pageToken) != "" {
@@ -331,7 +333,7 @@ func (c *ContactsOtherSearchCmd) Run(ctx context.Context, flags *RootFlags) erro
 
 	resp, err := svc.OtherContacts.Search().
 		Query(query).
-		ReadMask(contactsReadMask).
+		ReadMask(contactsOtherReadMask).
 		PageSize(c.Max).
 		Do()
 	if err != nil {
