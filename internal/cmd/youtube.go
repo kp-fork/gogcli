@@ -481,6 +481,7 @@ func (c *YouTubeSearchListCmd) Run(ctx context.Context, flags *RootFlags) error 
 	if err != nil {
 		return err
 	}
+	resp.Items = filterYouTubeSearchItemsByType(resp.Items, types)
 
 	if outfmt.IsJSON(ctx) {
 		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
@@ -537,6 +538,39 @@ func youtubeItemsOrEmpty[T any](items []*T) []*T {
 		return []*T{}
 	}
 	return items
+}
+
+func filterYouTubeSearchItemsByType(items []*youtube.SearchResult, allowed []string) []*youtube.SearchResult {
+	if len(items) == 0 || len(allowed) == 0 {
+		return items
+	}
+	allowedSet := make(map[string]bool, len(allowed))
+	for _, typ := range allowed {
+		allowedSet[typ] = true
+	}
+	filtered := items[:0]
+	for _, item := range items {
+		if allowedSet[youtubeSearchResultType(item)] {
+			filtered = append(filtered, item)
+		}
+	}
+	return filtered
+}
+
+func youtubeSearchResultType(item *youtube.SearchResult) string {
+	if item == nil || item.Id == nil {
+		return ""
+	}
+	switch {
+	case item.Id.VideoId != "":
+		return "video"
+	case item.Id.ChannelId != "":
+		return "channel"
+	case item.Id.PlaylistId != "":
+		return "playlist"
+	default:
+		return ""
+	}
 }
 
 func getYouTubeReadService(ctx context.Context, flags *RootFlags) (*youtube.Service, error) {

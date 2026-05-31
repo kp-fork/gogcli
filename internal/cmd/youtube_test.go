@@ -207,6 +207,70 @@ func TestYouTubeSearchWithAPIKey(t *testing.T) {
 	}
 }
 
+func TestYouTubeSearchFiltersUnexpectedKinds(t *testing.T) {
+	origNew := newYouTubeForAccount
+	t.Cleanup(func() { newYouTubeForAccount = origNew })
+
+	var gotQuery string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.RawQuery
+		if r.URL.Path != "/youtube/v3/search" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"items": []map[string]any{
+				{
+					"id": map[string]any{
+						"kind":      "youtube#channel",
+						"channelId": "UC123",
+					},
+					"snippet": map[string]any{"title": "Unexpected Channel"},
+				},
+				{
+					"id": map[string]any{
+						"kind":    "youtube#video",
+						"videoId": "vid123",
+					},
+					"snippet": map[string]any{"title": "Expected Video"},
+				},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	svc := newGoogleTestServiceWithEndpoint(t, srv.Client(), srv.URL+"/", youtube.NewService)
+	newYouTubeForAccount = func(context.Context, string) (*youtube.Service, error) {
+		return svc, nil
+	}
+
+	var err error
+	stdout := captureStdout(t, func() {
+		err = runKong(t, &YouTubeSearchListCmd{}, []string{"test query", "--type", "video", "--max", "2"}, newCmdJSONContext(t), &RootFlags{Account: "me@example.com", JSON: true})
+	})
+	if err != nil {
+		t.Fatalf("runKong: %v", err)
+	}
+	if !strings.Contains(gotQuery, "type=video") {
+		t.Fatalf("query = %s", gotQuery)
+	}
+
+	var got struct {
+		Items []struct {
+			ID struct {
+				Kind      string `json:"kind"`
+				VideoID   string `json:"videoId"`
+				ChannelID string `json:"channelId"`
+			} `json:"id"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &got); err != nil {
+		t.Fatalf("json output %q: %v", stdout, err)
+	}
+	if len(got.Items) != 1 || got.Items[0].ID.VideoID != "vid123" || got.Items[0].ID.ChannelID != "" {
+		t.Fatalf("unexpected filtered output: %s", stdout)
+	}
+}
+
 func TestYouTubeSearchWithOAuth(t *testing.T) {
 	origNew := newYouTubeForAccount
 	origAPIKey := newYouTubeWithAPIKey

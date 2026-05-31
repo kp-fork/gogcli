@@ -38,6 +38,7 @@
 - Slides: return empty JSON arrays, not null, for blank slide text and image lists in `slides read-slide`.
 - Slides: avoid invalid `deleteText` requests when updating speaker notes on a blank notes page.
 - YouTube: let `activities list --channel-id`, `playlists list --channel-id`, and `channels list --id` honor `--account` OAuth instead of requiring an API key.
+- YouTube: filter `youtube search list --type` output to the requested resource kinds when the API returns mixed results.
 - YouTube: return an empty JSON array, not null, when list responses contain no items.
 
 ## 0.20.0 - 2026-05-30
