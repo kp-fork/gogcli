@@ -55,6 +55,62 @@ func TestGmailTrackSetupAndStatus(t *testing.T) {
 	}
 }
 
+func TestGmailTrackJSONOutputs(t *testing.T) {
+	setupTrackingEnv(t)
+
+	var setupErr string
+	setupOut := captureStdout(t, func() {
+		setupErr = captureStderr(t, func() {
+			if err := Execute([]string{"--account", "a@b.com", "--no-input", "--json", "gmail", "track", "setup", "--worker-url", "https://example.com"}); err != nil {
+				t.Fatalf("setup: %v", err)
+			}
+		})
+	})
+	if strings.Contains(setupErr, "TRACKING_KEY=") || strings.Contains(setupErr, "ADMIN_KEY=") {
+		t.Fatalf("json setup should not print manual secrets to stderr: %q", setupErr)
+	}
+	var setupPayload map[string]any
+	if err := json.Unmarshal([]byte(setupOut), &setupPayload); err != nil {
+		t.Fatalf("setup json: %v\n%s", err, setupOut)
+	}
+	if setupPayload["configured"] != true || setupPayload["workerUrl"] != "https://example.com" {
+		t.Fatalf("unexpected setup json: %#v", setupPayload)
+	}
+	if setupPayload["trackingKeySet"] != true || setupPayload["adminConfigured"] != true {
+		t.Fatalf("setup json should expose secret presence, not values: %#v", setupPayload)
+	}
+
+	statusOut := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{"--account", "a@b.com", "--json", "gmail", "track", "status"}); err != nil {
+				t.Fatalf("status: %v", err)
+			}
+		})
+	})
+	var statusPayload map[string]any
+	if err := json.Unmarshal([]byte(statusOut), &statusPayload); err != nil {
+		t.Fatalf("status json: %v\n%s", err, statusOut)
+	}
+	if statusPayload["configured"] != true || statusPayload["trackingKeyVersion"].(float64) != 1 {
+		t.Fatalf("unexpected status json: %#v", statusPayload)
+	}
+
+	rotateOut := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{"--account", "a@b.com", "--no-input", "--json", "gmail", "track", "key", "rotate", "--no-deploy"}); err != nil {
+				t.Fatalf("rotate: %v", err)
+			}
+		})
+	})
+	var rotatePayload map[string]any
+	if err := json.Unmarshal([]byte(rotateOut), &rotatePayload); err != nil {
+		t.Fatalf("rotate json: %v\n%s", err, rotateOut)
+	}
+	if rotatePayload["trackingKeyRotated"] != true || rotatePayload["trackingKeyVersion"].(float64) != 2 {
+		t.Fatalf("unexpected rotate json: %#v", rotatePayload)
+	}
+}
+
 func TestGmailTrackKeyRotateNoDeploy(t *testing.T) {
 	setupTrackingEnv(t)
 

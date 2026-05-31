@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/steipete/gogcli/internal/input"
+	"github.com/steipete/gogcli/internal/outfmt"
 	"github.com/steipete/gogcli/internal/tracking"
 	"github.com/steipete/gogcli/internal/ui"
 )
@@ -191,6 +192,25 @@ func (c *GmailTrackSetupCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	path, _ := tracking.ConfigPath()
+	if outfmt.IsJSON(ctx) {
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+			"account":              account,
+			"adminConfigured":      strings.TrimSpace(adminKey) != "",
+			"configPath":           path,
+			"configured":           true,
+			"databaseId":           cfg.DatabaseID,
+			"databaseName":         cfg.DatabaseName,
+			"deployed":             c.Deploy,
+			"manualDeployRequired": !c.Deploy,
+			"secretsInKeyring":     cfg.SecretsInKeyring,
+			"trackingKeySet":       strings.TrimSpace(key) != "",
+			"trackingKeyVersion":   cfg.TrackingCurrentKeyVersion,
+			"trackingKeyVersions":  versions,
+			"workerName":           cfg.WorkerName,
+			"workerUrl":            cfg.WorkerURL,
+		})
+	}
+
 	u.Out().Linef("configured\ttrue")
 	u.Out().Linef("account\t%s", account)
 	if path != "" {

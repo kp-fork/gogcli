@@ -3,9 +3,11 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/steipete/gogcli/internal/outfmt"
 	"github.com/steipete/gogcli/internal/tracking"
 	"github.com/steipete/gogcli/internal/ui"
 )
@@ -113,6 +115,18 @@ func (c *GmailTrackKeyRotateCmd) Run(ctx context.Context, flags *RootFlags) erro
 	cfg.TrackingKeyVersions = versions
 	if err := tracking.SaveConfig(account, cfg); err != nil {
 		return fmt.Errorf("save tracking config: %w", err)
+	}
+
+	if outfmt.IsJSON(ctx) {
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+			"account":             account,
+			"databaseName":        cfg.DatabaseName,
+			"deployed":            !c.NoDeploy,
+			"trackingKeyRotated":  true,
+			"trackingKeyVersion":  nextVersion,
+			"trackingKeyVersions": versions,
+			"workerName":          cfg.WorkerName,
+		})
 	}
 
 	u.Out().Linef("tracking_key_rotated\ttrue")

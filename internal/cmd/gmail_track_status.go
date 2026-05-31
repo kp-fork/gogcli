@@ -2,8 +2,10 @@ package cmd
 
 import (
 	"context"
+	"os"
 	"strings"
 
+	"github.com/steipete/gogcli/internal/outfmt"
 	"github.com/steipete/gogcli/internal/tracking"
 	"github.com/steipete/gogcli/internal/ui"
 )
@@ -18,6 +20,23 @@ func (c *GmailTrackStatusCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	path, _ := tracking.ConfigPath()
+	if outfmt.IsJSON(ctx) {
+		payload := map[string]any{
+			"account":    account,
+			"configPath": path,
+			"configured": cfg.IsConfigured(),
+		}
+		if cfg.IsConfigured() {
+			payload["adminConfigured"] = strings.TrimSpace(cfg.AdminKey) != ""
+			payload["databaseId"] = cfg.DatabaseID
+			payload["databaseName"] = cfg.DatabaseName
+			payload["trackingKeyVersion"] = cfg.TrackingCurrentKeyVersion
+			payload["workerName"] = cfg.WorkerName
+			payload["workerUrl"] = cfg.WorkerURL
+		}
+		return outfmt.WriteJSON(ctx, os.Stdout, payload)
+	}
+
 	if path != "" {
 		u.Out().Linef("config_path\t%s", path)
 	}
