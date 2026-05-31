@@ -113,6 +113,56 @@ func TestExecute_FormsResponsesList_JSON(t *testing.T) {
 	}
 }
 
+func TestExecute_FormsResponsesList_JSONEmptyArray(t *testing.T) {
+	origNew := newFormsService
+	t.Cleanup(func() { newFormsService = origNew })
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !(strings.Contains(r.URL.Path, "/forms/form123/responses") && r.Method == http.MethodGet) {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{})
+	}))
+	defer srv.Close()
+
+	svc, err := formsapi.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(srv.Client()),
+		option.WithEndpoint(srv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	newFormsService = func(context.Context, string) (*formsapi.Service, error) { return svc, nil }
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{"--json", "--account", "a@b.com", "forms", "responses", "list", "form123", "--max", "1"}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+
+	var parsed struct {
+		FormID    string            `json:"form_id"`
+		Responses []json.RawMessage `json:"responses"`
+	}
+	if err := json.Unmarshal([]byte(out), &parsed); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if parsed.FormID != "form123" {
+		t.Fatalf("form_id = %q", parsed.FormID)
+	}
+	if parsed.Responses == nil {
+		t.Fatalf("responses must be an empty array, got nil: %s", out)
+	}
+	if len(parsed.Responses) != 0 {
+		t.Fatalf("responses len = %d, want 0", len(parsed.Responses))
+	}
+}
+
 func TestExecute_FormsResponsesList_RejectsNonPositiveMax(t *testing.T) {
 	origNew := newFormsService
 	t.Cleanup(func() { newFormsService = origNew })
