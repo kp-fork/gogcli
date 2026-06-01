@@ -80,6 +80,7 @@
 - Slides: make local-image insertion/replacement use stable Drive download URLs and retry while public sharing propagates.
 - Slides: return usage exit code 2 when `slides add-slide` and `slides replace-slide` reject unsupported image formats.
 - Slides: return usage exit code 2 when `slides create-from-template` rejects invalid replacement input.
+- Slides: return usage exit code 2 when `slides insert-text --insertion-index` is negative instead of accepting an invalid dry-run request.
 - Slides: return usage exit code 2 when `slides thumbnail` rejects invalid size or format values.
 - Slides: return empty JSON arrays, not null, for blank slide text and image lists in `slides read-slide`.
 - Slides: avoid invalid `deleteText` requests when updating speaker notes on a blank notes page.

@@ -49,6 +49,9 @@ func (c *SlidesInsertTextCmd) Run(ctx context.Context, flags *RootFlags) error {
 	if text == "" && !c.Replace {
 		return usage("empty text")
 	}
+	if c.InsertionIndex < 0 {
+		return usage("insertion-index must be >= 0")
+	}
 
 	// Build the batchUpdate request body.
 	var requests []*slides.Request

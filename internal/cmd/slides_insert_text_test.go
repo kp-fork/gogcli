@@ -297,6 +297,37 @@ func TestSlidesInsertText_DryRunNoAPICall(t *testing.T) {
 	}
 }
 
+func TestSlidesInsertText_InvalidInsertionIndexIsUsageErrorBeforeDryRun(t *testing.T) {
+	origSlides := newSlidesService
+	t.Cleanup(func() { newSlidesService = origSlides })
+
+	newSlidesService = func(context.Context, string) (*slides.Service, error) {
+		t.Fatal("slides service should not be created")
+		return nil, context.Canceled
+	}
+
+	flags := &RootFlags{Account: "a@b.com", DryRun: true}
+	u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
+	if uiErr != nil {
+		t.Fatalf("ui.New: %v", uiErr)
+	}
+	ctx := ui.WithUI(context.Background(), u)
+
+	cmd := &SlidesInsertTextCmd{
+		PresentationID: "pres1",
+		ObjectID:       "shape_1",
+		Text:           "dry",
+		InsertionIndex: -1,
+	}
+	err := cmd.Run(ctx, flags)
+	if err == nil {
+		t.Fatal("expected insertion-index error")
+	}
+	if got := ExitCode(err); got != 2 {
+		t.Fatalf("ExitCode = %d, want 2 (err=%v)", got, err)
+	}
+}
+
 func TestSlidesInsertText_EmptyTextWithoutReplace(t *testing.T) {
 	origSlides := newSlidesService
 	t.Cleanup(func() { newSlidesService = origSlides })
