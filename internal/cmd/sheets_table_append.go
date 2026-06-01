@@ -111,14 +111,14 @@ func parseSheetsAppendValues(valuesJSON string, values []string) ([][]interface{
 	case strings.TrimSpace(valuesJSON) != "":
 		b, err := resolveInlineOrFileBytes(valuesJSON)
 		if err != nil {
-			return nil, fmt.Errorf("read --values-json: %w", err)
+			return nil, usagef("read --values-json: %v", err)
 		}
 		var parsed [][]interface{}
 		if err := json.Unmarshal(b, &parsed); err != nil {
-			return nil, fmt.Errorf("invalid JSON values: %w", err)
+			return nil, usagef("invalid JSON values: %v", err)
 		}
 		if len(parsed) == 0 {
-			return nil, fmt.Errorf("provide at least one row")
+			return nil, usage("provide at least one row")
 		}
 		return parsed, nil
 	case len(values) > 0:
@@ -135,7 +135,7 @@ func parseSheetsAppendValues(valuesJSON string, values []string) ([][]interface{
 		}
 		return parsed, nil
 	default:
-		return nil, fmt.Errorf("provide values as args or via --values-json")
+		return nil, usage("provide values as args or via --values-json")
 	}
 }
 

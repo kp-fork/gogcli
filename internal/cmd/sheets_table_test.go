@@ -327,6 +327,41 @@ func TestSheetsTableAppendRejectsTooWideRows(t *testing.T) {
 	}
 }
 
+func TestSheetsTableAppendValueValidationIsUsage(t *testing.T) {
+	tests := []struct {
+		name       string
+		valuesJSON string
+		values     []string
+		want       string
+	}{
+		{
+			name: "missing values",
+			want: "provide values",
+		},
+		{
+			name:       "invalid json",
+			valuesJSON: "nope",
+			want:       "invalid JSON values",
+		},
+		{
+			name:       "empty json rows",
+			valuesJSON: "[]",
+			want:       "provide at least one row",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := parseSheetsAppendValues(tt.valuesJSON, tt.values)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("expected %q error, got %v", tt.want, err)
+			}
+			if got := ExitCode(err); got != 2 {
+				t.Fatalf("ExitCode = %d, want 2 (err=%v)", got, err)
+			}
+		})
+	}
+}
+
 func TestSheetsTableClearCmdClearsDataRowsOnly(t *testing.T) {
 	origNew := newSheetsService
 	t.Cleanup(func() { newSheetsService = origNew })
