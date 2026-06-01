@@ -33,6 +33,7 @@
 - CLI: report public command paths in dry-run op fields for service-account, Calendar, Forms, Meet, and Sheets named-range commands.
 - CLI: preserve command-local `--fields` API masks for Drive, Drive Labels, Sites, and Calendar Events instead of rewriting them to JSON `--select`.
 - Drive: return usage exit code 2 when `drive download --tab` rejects unsupported export formats.
+- Drive: return usage exit code 2 when `drive download --format` is used on binary/non-Google Workspace files.
 - Drive: return usage exit code 2 when `drive upload --replace` rejects Google Workspace native files.
 - Drive Labels: return usage exit code 2 for invalid integer field values instead of reporting them as generic runtime failures.
 - Gmail: return empty JSON arrays, not null, for empty forwarding address, delegate, and send-as settings lists.

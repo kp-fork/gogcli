@@ -218,6 +218,9 @@ func TestExecute_DriveDownload_FormatRejected_NonGoogle(t *testing.T) {
 	if !strings.Contains(execErr.Error(), "non-Google Workspace") {
 		t.Fatalf("unexpected error: %v", execErr)
 	}
+	if got := ExitCode(execErr); got != 2 {
+		t.Fatalf("expected usage exit code 2, got %d (err=%v)", got, execErr)
+	}
 	if called {
 		t.Fatalf("download should not be called on format error")
 	}

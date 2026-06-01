@@ -194,7 +194,7 @@ func validateDriveDownloadFormatForFile(meta *drive.File, format string) error {
 	if strings.TrimSpace(format) == "" {
 		return nil
 	}
-	return fmt.Errorf("--format %q not supported for non-Google Workspace files (mimeType=%q); file can only be downloaded as-is", format, meta.MimeType)
+	return usagef("--format %q not supported for non-Google Workspace files (mimeType=%q); file can only be downloaded as-is", format, meta.MimeType)
 }
 
 var driveDownload = func(ctx context.Context, svc *drive.Service, fileID string) (*http.Response, error) {
