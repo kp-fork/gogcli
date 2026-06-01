@@ -284,9 +284,18 @@ func TestSheetsFormat_ValidationErrors(t *testing.T) {
 	}
 	if err := (&SheetsFormatCmd{SpreadsheetID: "s1", Range: "Sheet1!A1", FormatJSON: "{\"boarders\":{\"top\":{\"style\":\"SOLID\"}}}", FormatFields: "borders.top.style"}).Run(ctx, flags); err == nil {
 		t.Fatalf("expected format unknown field error for boarders json typo")
+	} else if got := ExitCode(err); got != 2 {
+		t.Fatalf("expected usage exit code 2, got %d (err=%v)", got, err)
 	}
 	if err := (&SheetsFormatCmd{SpreadsheetID: "s1", Range: "Sheet1!A1", FormatJSON: "{\"borders\":{\"top\":{\"style\":\"SOLID\"}}}", FormatFields: "boarders.top.style"}).Run(ctx, flags); err == nil {
 		t.Fatalf("expected format typo error for boarders field mask")
+	} else if got := ExitCode(err); got != 2 {
+		t.Fatalf("expected usage exit code 2, got %d (err=%v)", got, err)
+	}
+	if err := (&SheetsFormatCmd{SpreadsheetID: "s1", Range: "Sheet1!A1", FormatJSON: "{\"textFormat\":{\"bold\":true}}", FormatFields: "userEnteredFormat.nope"}).Run(ctx, flags); err == nil {
+		t.Fatalf("expected format invalid field error")
+	} else if got := ExitCode(err); got != 2 {
+		t.Fatalf("expected usage exit code 2, got %d (err=%v)", got, err)
 	}
 	if err := (&SheetsFormatCmd{SpreadsheetID: "s1", Range: "A1:B2", FormatJSON: "{\"textFormat\":{\"bold\":true}}", FormatFields: "userEnteredFormat.textFormat.bold"}).Run(ctx, flags); err == nil {
 		t.Fatalf("expected format missing sheet name error")

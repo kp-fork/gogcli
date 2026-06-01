@@ -64,7 +64,7 @@ func (c *SheetsFormatCmd) Run(ctx context.Context, flags *RootFlags) error {
 		formatJSONPaths = paths
 	}
 	if err = applyForceSendFields(&format, formatJSONPaths); err != nil {
-		return err
+		return usage(err.Error())
 	}
 
 	if dryRunErr := dryRunExit(ctx, flags, "sheets.format", map[string]any{

@@ -58,6 +58,29 @@ func TestSheetsConditionalAddBuildsRule(t *testing.T) {
 	}
 }
 
+func TestSheetsConditionalAdd_InvalidFormatFieldIsUsage(t *testing.T) {
+	u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
+	if uiErr != nil {
+		t.Fatalf("ui.New: %v", uiErr)
+	}
+	ctx := ui.WithUI(context.Background(), u)
+	flags := &RootFlags{Account: "a@b.com", DryRun: true}
+
+	err := runKong(t, &SheetsConditionalAddCmd{}, []string{
+		"s1", "Sheet1!A1",
+		"--type", "text-eq",
+		"--expr", "x",
+		"--format-json", `{"textFormat":{"bold":true}}`,
+		"--format-fields", "userEnteredFormat.nope",
+	}, ctx, flags)
+	if err == nil {
+		t.Fatal("expected invalid format field error")
+	}
+	if got := ExitCode(err); got != 2 {
+		t.Fatalf("ExitCode = %d, want 2 (err=%v)", got, err)
+	}
+}
+
 func TestSheetsConditionalClearAllDeletesReverseAndRequiresForce(t *testing.T) {
 	ctx, flags, requests, _, cleanup := newSheetsAdvancedTestContext(t, sheetsAdvancedTestState{
 		ConditionalRules: 2,

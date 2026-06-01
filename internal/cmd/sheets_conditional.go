@@ -266,22 +266,22 @@ type conditionalRuleItem struct {
 func parseConditionalFormat(formatJSON, formatMask string) (*sheets.CellFormat, string, error) {
 	b, err := resolveInlineOrFileBytes(formatJSON)
 	if err != nil {
-		return nil, "", fmt.Errorf("read --format-json: %w", err)
+		return nil, "", usagef("read --format-json: %v", err)
 	}
 	var format sheets.CellFormat
 	if err := decodeCellFormatJSON(b, &format); err != nil {
-		return nil, "", fmt.Errorf("invalid --format-json: %w", err)
+		return nil, "", usagef("invalid --format-json: %v", err)
 	}
 	formatFields := strings.TrimSpace(formatMask)
 	if formatFields != "" {
 		if hasBoardersTypo(formatFields) {
-			return nil, "", fmt.Errorf(`invalid --format-fields: found "boarders"; use "borders"`)
+			return nil, "", usage(`invalid --format-fields: found "boarders"; use "borders"`)
 		}
 		normalized, formatPaths := normalizeFormatMask(formatFields)
 		formatFields = strings.TrimPrefix(normalized, sheetsUserEnteredFormatPrefix+".")
 		formatFields = strings.ReplaceAll(formatFields, ","+sheetsUserEnteredFormatPrefix+".", ",")
 		if err := applyForceSendFields(&format, formatPaths); err != nil {
-			return nil, "", err
+			return nil, "", usage(err.Error())
 		}
 	}
 	return &format, formatFields, nil
