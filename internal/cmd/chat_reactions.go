@@ -184,6 +184,10 @@ func (c *ChatMessagesReactionsDeleteCmd) Run(ctx context.Context, flags *RootFla
 	if reaction == "" {
 		return usage("required: reaction")
 	}
+	reaction, err := normalizeReaction(reaction)
+	if err != nil {
+		return usage("required: reaction resource (spaces/.../messages/.../reactions/...)")
+	}
 
 	if dryRunErr := dryRunExit(ctx, flags, "chat.messages.reactions.delete", map[string]any{
 		"reaction": reaction,

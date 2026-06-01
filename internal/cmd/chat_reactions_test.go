@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -60,6 +61,57 @@ func TestNormalizeMessage(t *testing.T) {
 			}
 			if !tt.wantErr && got != tt.want {
 				t.Fatalf("normalizeMessage(%q, %q) = %q, want %q", tt.space, tt.msg, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNormalizeReaction(t *testing.T) {
+	tests := []struct {
+		name     string
+		reaction string
+		want     string
+		wantErr  bool
+	}{
+		{
+			name:     "full resource path",
+			reaction: "spaces/AAA/messages/msg1/reactions/r1",
+			want:     "spaces/AAA/messages/msg1/reactions/r1",
+		},
+		{
+			name:     "empty reaction",
+			reaction: "",
+			wantErr:  true,
+		},
+		{
+			name:     "bare id",
+			reaction: "r1",
+			wantErr:  true,
+		},
+		{
+			name:     "message resource",
+			reaction: "spaces/AAA/messages/msg1",
+			wantErr:  true,
+		},
+		{
+			name:     "empty reaction id",
+			reaction: "spaces/AAA/messages/msg1/reactions/",
+			wantErr:  true,
+		},
+		{
+			name:     "extra path segment",
+			reaction: "spaces/AAA/messages/msg1/reactions/r1/extra",
+			wantErr:  true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := normalizeReaction(tt.reaction)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("normalizeReaction(%q) error = %v, wantErr %v", tt.reaction, err, tt.wantErr)
+			}
+			if !tt.wantErr && got != tt.want {
+				t.Fatalf("normalizeReaction(%q) = %q, want %q", tt.reaction, got, tt.want)
 			}
 		})
 	}
@@ -216,6 +268,32 @@ func TestExecute_ChatMessagesReact_Shorthand(t *testing.T) {
 	}
 	if !strings.Contains(out, "spaces/AAA/messages/msg1/reactions/r1") {
 		t.Fatalf("unexpected output: %q", out)
+	}
+}
+
+func TestExecute_ChatMessagesReactionsDelete_InvalidResourceFailsBeforeDryRun(t *testing.T) {
+	origNew := newChatService
+	t.Cleanup(func() { newChatService = origNew })
+	newChatService = func(context.Context, string) (*chat.Service, error) {
+		t.Fatalf("expected validation to fail before creating chat service")
+		return nil, errUnexpectedChatServiceCall
+	}
+
+	testCases := [][]string{
+		{"--account", "a@b.com", "--dry-run", "chat", "messages", "reactions", "delete", "nope"},
+		{"--account", "a@b.com", "--dry-run", "chat", "messages", "reactions", "delete", "spaces/AAA/messages/msg1"},
+		{"--account", "a@b.com", "--dry-run", "chat", "messages", "reactions", "delete", "spaces/AAA/messages/msg1/reactions/"},
+	}
+	for _, args := range testCases {
+		t.Run(strings.Join(args[4:], "_"), func(t *testing.T) {
+			_ = captureStderr(t, func() {
+				err := Execute(args)
+				var exitErr *ExitError
+				if !errors.As(err, &exitErr) || exitErr.Code != 2 || !strings.Contains(err.Error(), "required: reaction resource") {
+					t.Fatalf("unexpected err: %v", err)
+				}
+			})
+		})
 	}
 }
 

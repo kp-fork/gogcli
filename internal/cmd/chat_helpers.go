@@ -102,6 +102,23 @@ func normalizeMessage(space, resource string) (string, error) {
 	return fmt.Sprintf("%s/messages/%s", space, msg), nil
 }
 
+func normalizeReaction(resource string) (string, error) {
+	reaction := strings.TrimSpace(resource)
+	if reaction == "" {
+		return "", fmt.Errorf("empty reaction")
+	}
+	parts := strings.Split(reaction, "/")
+	if len(parts) != 6 || parts[0] != "spaces" || parts[2] != "messages" || parts[4] != "reactions" {
+		return "", fmt.Errorf("invalid reaction resource %q", reaction)
+	}
+	for _, part := range []string{parts[1], parts[3], parts[5]} {
+		if part == "" {
+			return "", fmt.Errorf("invalid reaction resource %q", reaction)
+		}
+	}
+	return reaction, nil
+}
+
 func parseCommaArgs(values []string) []string {
 	out := make([]string, 0, len(values))
 	for _, raw := range values {
