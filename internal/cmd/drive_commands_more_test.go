@@ -27,9 +27,6 @@ type fakeDriveCommands struct {
 func newFakeDriveCommands(t *testing.T) *fakeDriveCommands {
 	t.Helper()
 
-	origNew := newDriveService
-	t.Cleanup(func() { newDriveService = origNew })
-
 	uploadMetas := make([]map[string]any, 0, 4)
 	uploadMedia := make([]string, 0, 4)
 
@@ -225,17 +222,14 @@ func newFakeDriveCommands(t *testing.T) *fakeDriveCommands {
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}
-	newDriveService = func(context.Context, string) (*drive.Service, error) { return svc, nil }
 
 	run := func(args ...string) string {
 		t.Helper()
-		return captureStdout(t, func() {
-			_ = captureStderr(t, func() {
-				if execErr := Execute(args); execErr != nil {
-					t.Fatalf("Execute %v: %v", args, execErr)
-				}
-			})
-		})
+		result := executeWithDriveTestService(t, args, svc)
+		if result.err != nil {
+			t.Fatalf("Execute %v: %v", args, result.err)
+		}
+		return result.stdout
 	}
 
 	return &fakeDriveCommands{

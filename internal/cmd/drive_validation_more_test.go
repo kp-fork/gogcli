@@ -15,16 +15,10 @@ import (
 
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/option"
-
-	"github.com/steipete/gogcli/internal/ui"
 )
 
 func TestDriveCommands_MissingAccount(t *testing.T) {
-	u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
-	if uiErr != nil {
-		t.Fatalf("ui.New: %v", uiErr)
-	}
-	ctx := ui.WithUI(context.Background(), u)
+	ctx := newCmdRuntimeOutputContext(t, io.Discard, io.Discard)
 	flags := &RootFlags{}
 
 	cases := []struct {
@@ -54,11 +48,7 @@ func TestDriveCommands_MissingAccount(t *testing.T) {
 }
 
 func TestDriveCommands_UsageErrors(t *testing.T) {
-	u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
-	if uiErr != nil {
-		t.Fatalf("ui.New: %v", uiErr)
-	}
-	ctx := ui.WithUI(context.Background(), u)
+	ctx := newCmdRuntimeOutputContext(t, io.Discard, io.Discard)
 	flags := &RootFlags{Account: "a@b.com"}
 
 	cases := []struct {
@@ -91,18 +81,10 @@ func TestDriveCommands_UsageErrors(t *testing.T) {
 }
 
 func TestDriveListSearchInvalidMaxFailsBeforeService(t *testing.T) {
-	origNew := newDriveService
-	t.Cleanup(func() { newDriveService = origNew })
-	newDriveService = func(context.Context, string) (*drive.Service, error) {
+	ctx := withDriveTestServiceFactory(newCmdRuntimeOutputContext(t, io.Discard, io.Discard), func(context.Context, string) (*drive.Service, error) {
 		t.Fatalf("expected max validation to fail before creating drive service")
 		return nil, errors.New("unexpected drive service call")
-	}
-
-	u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
-	if uiErr != nil {
-		t.Fatalf("ui.New: %v", uiErr)
-	}
-	ctx := ui.WithUI(context.Background(), u)
+	})
 	flags := &RootFlags{Account: "a@b.com"}
 	cases := []struct {
 		name string
@@ -127,18 +109,10 @@ func TestDriveListSearchInvalidMaxFailsBeforeService(t *testing.T) {
 }
 
 func TestDriveScanInvalidBoundsFailBeforeServiceOrDryRun(t *testing.T) {
-	origNew := newDriveService
-	t.Cleanup(func() { newDriveService = origNew })
-	newDriveService = func(context.Context, string) (*drive.Service, error) {
+	ctx := withDriveTestServiceFactory(newCmdRuntimeOutputContext(t, io.Discard, io.Discard), func(context.Context, string) (*drive.Service, error) {
 		t.Fatalf("expected scan validation to fail before creating drive service")
 		return nil, errors.New("unexpected drive service call")
-	}
-
-	u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
-	if uiErr != nil {
-		t.Fatalf("ui.New: %v", uiErr)
-	}
-	ctx := ui.WithUI(context.Background(), u)
+	})
 	flags := &RootFlags{Account: "a@b.com"}
 	dryRunFlags := &RootFlags{Account: "a@b.com", DryRun: true}
 	cases := []struct {
@@ -176,17 +150,9 @@ func TestDriveScanInvalidBoundsFailBeforeServiceOrDryRun(t *testing.T) {
 }
 
 func TestDriveShare_DefaultRole(t *testing.T) {
-	origNew := newDriveService
-	t.Cleanup(func() { newDriveService = origNew })
-	newDriveService = func(context.Context, string) (*drive.Service, error) {
+	ctx := withDriveTestServiceFactory(newCmdRuntimeOutputContext(t, io.Discard, io.Discard), func(context.Context, string) (*drive.Service, error) {
 		return nil, errors.New("no service")
-	}
-
-	u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
-	if uiErr != nil {
-		t.Fatalf("ui.New: %v", uiErr)
-	}
-	ctx := ui.WithUI(context.Background(), u)
+	})
 	flags := &RootFlags{Account: "a@b.com"}
 
 	if err := (&DriveShareCmd{FileID: "f1", Email: "x@y.com"}).Run(ctx, flags); err == nil {
@@ -276,9 +242,7 @@ func TestDriveShareNormalizeTarget(t *testing.T) {
 }
 
 func TestDriveShare_InvalidTargetsFailBeforeDryRun(t *testing.T) {
-	origNew := newDriveService
-	t.Cleanup(func() { newDriveService = origNew })
-	newDriveService = func(context.Context, string) (*drive.Service, error) {
+	factory := func(context.Context, string) (*drive.Service, error) {
 		t.Fatalf("expected validation to fail before creating drive service")
 		return nil, errors.New("unexpected drive service call")
 	}
@@ -307,21 +271,16 @@ func TestDriveShare_InvalidTargetsFailBeforeDryRun(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			_ = captureStderr(t, func() {
-				err := Execute(tc.args)
-				var exitErr *ExitError
-				if !errors.As(err, &exitErr) || exitErr.Code != 2 || !strings.Contains(err.Error(), tc.want) {
-					t.Fatalf("unexpected err: %v", err)
-				}
-			})
+			result := executeWithDriveTestServiceFactory(t, tc.args, factory)
+			var exitErr *ExitError
+			if !errors.As(result.err, &exitErr) || exitErr.Code != 2 || !strings.Contains(result.err.Error(), tc.want) {
+				t.Fatalf("unexpected err: %v", result.err)
+			}
 		})
 	}
 }
 
 func TestDriveShare_CommenterRole(t *testing.T) {
-	origNew := newDriveService
-	t.Cleanup(func() { newDriveService = origNew })
-
 	var sawCommenterRole bool
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimPrefix(r.URL.Path, "/drive/v3")
@@ -363,13 +322,8 @@ func TestDriveShare_CommenterRole(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewDriveService: %v", err)
 	}
-	newDriveService = func(context.Context, string) (*drive.Service, error) { return svc, nil }
 
-	u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
-	if uiErr != nil {
-		t.Fatalf("ui.New: %v", uiErr)
-	}
-	ctx := ui.WithUI(context.Background(), u)
+	ctx := withDriveTestService(newCmdRuntimeOutputContext(t, io.Discard, io.Discard), svc)
 	flags := &RootFlags{Account: "a@b.com"}
 
 	err = (&DriveShareCmd{
@@ -387,9 +341,6 @@ func TestDriveShare_CommenterRole(t *testing.T) {
 }
 
 func TestDriveShare_Notify(t *testing.T) {
-	origNew := newDriveService
-	t.Cleanup(func() { newDriveService = origNew })
-
 	var sawNotify bool
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimPrefix(r.URL.Path, "/drive/v3")
@@ -429,13 +380,8 @@ func TestDriveShare_Notify(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewDriveService: %v", err)
 	}
-	newDriveService = func(context.Context, string) (*drive.Service, error) { return svc, nil }
 
-	u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
-	if uiErr != nil {
-		t.Fatalf("ui.New: %v", uiErr)
-	}
-	ctx := ui.WithUI(context.Background(), u)
+	ctx := withDriveTestService(newCmdRuntimeOutputContext(t, io.Discard, io.Discard), svc)
 
 	err = (&DriveShareCmd{
 		FileID: "f1",
@@ -453,56 +399,30 @@ func TestDriveShare_Notify(t *testing.T) {
 }
 
 func TestDriveShare_DryRunSkipsPermissionCreate(t *testing.T) {
-	origNew := newDriveService
-	t.Cleanup(func() { newDriveService = origNew })
-
-	var createCalls int
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		path := strings.TrimPrefix(r.URL.Path, "/drive/v3")
-		if r.Method == http.MethodPost && strings.HasSuffix(path, "/permissions") {
-			createCalls++
-			t.Fatalf("permission create should not be called during dry-run")
-		}
-		http.NotFound(w, r)
-	}))
-	defer srv.Close()
-
-	svc, err := drive.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewDriveService: %v", err)
-	}
-	newDriveService = func(context.Context, string) (*drive.Service, error) { return svc, nil }
-
-	out := captureStdout(t, func() {
-		err := (&DriveShareCmd{
-			FileID: "f1",
-			To:     driveShareToUser,
-			Email:  "x@y.com",
-			Role:   drivePermRoleReader,
-			Notify: true,
-		}).Run(newCalendarJSONContext(t), &RootFlags{Account: "a@b.com", DryRun: true})
-		var exitErr *ExitError
-		if !errors.As(err, &exitErr) || exitErr.Code != 0 {
-			t.Fatalf("DriveShareCmd.Run: %v", err)
-		}
+	var out bytes.Buffer
+	ctx := withDriveTestServiceFactory(newCmdRuntimeJSONOutputContext(t, &out, io.Discard), func(context.Context, string) (*drive.Service, error) {
+		t.Fatal("Drive service should not be created during dry-run")
+		return nil, errors.New("unexpected Drive service call")
 	})
-	if createCalls != 0 {
-		t.Fatalf("permission create calls = %d", createCalls)
+	err := (&DriveShareCmd{
+		FileID: "f1",
+		To:     driveShareToUser,
+		Email:  "x@y.com",
+		Role:   drivePermRoleReader,
+		Notify: true,
+	}).Run(ctx, &RootFlags{Account: "a@b.com", DryRun: true})
+	var exitErr *ExitError
+	if !errors.As(err, &exitErr) || exitErr.Code != 0 {
+		t.Fatalf("DriveShareCmd.Run: %v", err)
 	}
-	if !strings.Contains(out, `"sendNotificationEmail": true`) {
-		t.Fatalf("unexpected dry-run output: %s", out)
+	if !strings.Contains(out.String(), `"sendNotificationEmail": true`) {
+		t.Fatalf("unexpected dry-run output: %s", out.String())
 	}
 }
 
 func TestDriveDownload_TextOutput(t *testing.T) {
-	origNew := newDriveService
 	origDownload := driveDownload
 	t.Cleanup(func() {
-		newDriveService = origNew
 		driveDownload = origDownload
 	})
 
@@ -534,14 +454,9 @@ func TestDriveDownload_TextOutput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}
-	newDriveService = func(context.Context, string) (*drive.Service, error) { return svc, nil }
 
 	var outBuf bytes.Buffer
-	u, uiErr := ui.New(ui.Options{Stdout: &outBuf, Stderr: io.Discard, Color: "never"})
-	if uiErr != nil {
-		t.Fatalf("ui.New: %v", uiErr)
-	}
-	ctx := ui.WithUI(context.Background(), u)
+	ctx := withDriveTestService(newCmdRuntimeOutputContext(t, &outBuf, io.Discard), svc)
 	flags := &RootFlags{Account: "a@b.com"}
 
 	dest := filepath.Join(t.TempDir(), "out.txt")
@@ -694,11 +609,6 @@ func TestStripOfficeExt(t *testing.T) {
 }
 
 func TestDriveUpload_ConvertUnsupported(t *testing.T) {
-	u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
-	if uiErr != nil {
-		t.Fatalf("ui.New: %v", uiErr)
-	}
-	ctx := ui.WithUI(context.Background(), u)
 	flags := &RootFlags{Account: "a@b.com"}
 
 	tmp := filepath.Join(t.TempDir(), "photo.png")
@@ -706,13 +616,11 @@ func TestDriveUpload_ConvertUnsupported(t *testing.T) {
 		t.Fatalf("write temp: %v", err)
 	}
 
-	origNew := newDriveService
-	t.Cleanup(func() { newDriveService = origNew })
 	newServiceCalled := false
-	newDriveService = func(context.Context, string) (*drive.Service, error) {
+	ctx := withDriveTestServiceFactory(newCmdRuntimeOutputContext(t, io.Discard, io.Discard), func(context.Context, string) (*drive.Service, error) {
 		newServiceCalled = true
 		return &drive.Service{}, nil
-	}
+	})
 
 	cmd := &DriveUploadCmd{LocalPath: tmp, Convert: true}
 	if err := cmd.Run(ctx, flags); err == nil {
@@ -723,7 +631,7 @@ func TestDriveUpload_ConvertUnsupported(t *testing.T) {
 		t.Fatalf("expected usage exit code 2, got %d (err=%v)", ExitCode(err), err)
 	}
 	if newServiceCalled {
-		t.Fatalf("newDriveService should not be called when --convert validation fails")
+		t.Fatalf("Drive service should not be created when --convert validation fails")
 	}
 }
 
