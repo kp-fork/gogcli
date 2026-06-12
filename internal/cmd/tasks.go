@@ -1,11 +1,5 @@
 package cmd
 
-import (
-	"github.com/steipete/gogcli/internal/googleapi"
-)
-
-var newTasksService = googleapi.NewTasks
-
 type TasksCmd struct {
 	Lists  TasksListsCmd  `cmd:"" name:"lists" help:"List task lists"`
 	List   TasksListCmd   `cmd:"" name:"list" aliases:"ls" help:"List tasks"`

@@ -44,7 +44,7 @@ func newDefaultRuntime() *app.Runtime {
 			PeopleOther:     googleapi.NewPeopleOtherContacts,
 			Sheets:          googleapi.NewSheets,
 			Slides:          googleapi.NewSlides,
-			Tasks:           newTasksService,
+			Tasks:           googleapi.NewTasks,
 			Zoom:            newZoomMeetingClient,
 			DriveDownload:   driveDownload,
 			DriveExport:     driveExportDownload,
@@ -227,7 +227,7 @@ func tasksService(ctx context.Context, account string) (*tasks.Service, error) {
 	if runtime, ok := app.FromContext(ctx); ok && runtime.Services.Tasks != nil {
 		return runtime.Services.Tasks(ctx, account)
 	}
-	return newTasksService(ctx, account)
+	return googleapi.NewTasks(ctx, account)
 }
 
 func slidesService(ctx context.Context, account string) (*slides.Service, error) {
