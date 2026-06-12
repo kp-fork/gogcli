@@ -17,8 +17,7 @@ import (
 )
 
 func TestDocsCreateCopyCat_JSON(t *testing.T) {
-	origDocs := newDocsService
-	t.Cleanup(func() { newDocsService = origDocs })
+	t.Parallel()
 
 	export := func(context.Context, *drive.Service, string, string) (*http.Response, error) {
 		return &http.Response{
@@ -103,11 +102,10 @@ func TestDocsCreateCopyCat_JSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewDocsService: %v", err)
 	}
-	newDocsService = func(context.Context, string) (*docs.Service, error) { return docSvc, nil }
-
 	flags := &RootFlags{Account: "a@b.com"}
 	var stdout, stderr bytes.Buffer
 	ctx := withDriveTestOperations(newCmdRuntimeJSONOutputContext(t, &stdout, &stderr), svc, nil, export)
+	ctx = withDocsTestService(ctx, docSvc)
 
 	cmd := &DocsCreateCmd{}
 	if err := runKong(t, cmd, []string{"Doc"}, ctx, flags); err != nil {
@@ -131,8 +129,7 @@ func TestDocsCreateCopyCat_JSON(t *testing.T) {
 }
 
 func TestDocsCreate_Pageless(t *testing.T) {
-	origDocs := newDocsService
-	t.Cleanup(func() { newDocsService = origDocs })
+	t.Parallel()
 
 	var batchRequests [][]*docs.Request
 
@@ -182,10 +179,8 @@ func TestDocsCreate_Pageless(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewDocsService: %v", err)
 	}
-	newDocsService = func(context.Context, string) (*docs.Service, error) { return docSvc, nil }
-
 	flags := &RootFlags{Account: "a@b.com"}
-	ctx := newDocsJSONContextWithDrive(t, driveSvc)
+	ctx := withDocsTestService(newDocsJSONContextWithDrive(t, driveSvc), docSvc)
 
 	cmd := &DocsCreateCmd{}
 	if err := runKong(t, cmd, []string{"Doc", "--pageless"}, ctx, flags); err != nil {
@@ -204,6 +199,8 @@ func TestDocsCreate_Pageless(t *testing.T) {
 }
 
 func TestDocsCreate_DryRunDoesNotOpenService(t *testing.T) {
+	t.Parallel()
+
 	var stdout, stderr bytes.Buffer
 	ctx := withDriveTestServiceFactory(
 		newCmdRuntimeJSONOutputContext(t, &stdout, &stderr),
@@ -212,6 +209,10 @@ func TestDocsCreate_DryRunDoesNotOpenService(t *testing.T) {
 			return nil, errors.New("unexpected Drive service call")
 		},
 	)
+	ctx = withDocsTestServiceFactory(ctx, func(context.Context, string) (*docs.Service, error) {
+		t.Fatal("Docs service should not be called during dry-run")
+		return nil, errors.New("unexpected Docs service call")
+	})
 	err := (&DocsCreateCmd{
 		Title:    "Dry Run",
 		Parent:   "folder1",
@@ -368,7 +369,7 @@ func newTabsTestServer(t *testing.T) (*docs.Service, func()) {
 	return docSvc, srv.Close
 }
 
-func runDocsCatCommand(t *testing.T, args []string, jsonMode bool) executeTestResult {
+func runDocsCatCommand(t *testing.T, svc *docs.Service, args []string, jsonMode bool) executeTestResult {
 	t.Helper()
 
 	var stdout, stderr bytes.Buffer
@@ -378,6 +379,7 @@ func runDocsCatCommand(t *testing.T, args []string, jsonMode bool) executeTestRe
 	} else {
 		ctx = newCmdRuntimeOutputContext(t, &stdout, &stderr)
 	}
+	ctx = withDocsTestService(ctx, svc)
 	err := runKong(t, &DocsCatCmd{}, args, ctx, &RootFlags{Account: "a@b.com"})
 	return executeTestResult{
 		stdout: stdout.String(),
@@ -387,14 +389,12 @@ func runDocsCatCommand(t *testing.T, args []string, jsonMode bool) executeTestRe
 }
 
 func TestDocsCat_DefaultNoTabs(t *testing.T) {
-	origDocs := newDocsService
-	t.Cleanup(func() { newDocsService = origDocs })
+	t.Parallel()
 
 	docSvc, cleanup := newTabsTestServer(t)
 	defer cleanup()
-	newDocsService = func(context.Context, string) (*docs.Service, error) { return docSvc, nil }
 
-	result := runDocsCatCommand(t, []string{"doc1"}, false)
+	result := runDocsCatCommand(t, docSvc, []string{"doc1"}, false)
 	if result.err != nil {
 		t.Fatalf("cat: %v", result.err)
 	}
@@ -408,14 +408,12 @@ func TestDocsCat_DefaultNoTabs(t *testing.T) {
 }
 
 func TestDocsCat_AllTabs(t *testing.T) {
-	origDocs := newDocsService
-	t.Cleanup(func() { newDocsService = origDocs })
+	t.Parallel()
 
 	docSvc, cleanup := newTabsTestServer(t)
 	defer cleanup()
-	newDocsService = func(context.Context, string) (*docs.Service, error) { return docSvc, nil }
 
-	result := runDocsCatCommand(t, []string{"doc1", "--all-tabs"}, false)
+	result := runDocsCatCommand(t, docSvc, []string{"doc1", "--all-tabs"}, false)
 	if result.err != nil {
 		t.Fatalf("cat --all-tabs: %v", result.err)
 	}
@@ -435,14 +433,12 @@ func TestDocsCat_AllTabs(t *testing.T) {
 }
 
 func TestDocsCat_AllTabs_JSON(t *testing.T) {
-	origDocs := newDocsService
-	t.Cleanup(func() { newDocsService = origDocs })
+	t.Parallel()
 
 	docSvc, cleanup := newTabsTestServer(t)
 	defer cleanup()
-	newDocsService = func(context.Context, string) (*docs.Service, error) { return docSvc, nil }
 
-	execResult := runDocsCatCommand(t, []string{"doc1", "--all-tabs"}, true)
+	execResult := runDocsCatCommand(t, docSvc, []string{"doc1", "--all-tabs"}, true)
 	if execResult.err != nil {
 		t.Fatalf("cat --all-tabs --json: %v", execResult.err)
 	}
@@ -463,14 +459,12 @@ func TestDocsCat_AllTabs_JSON(t *testing.T) {
 }
 
 func TestDocsCat_Raw(t *testing.T) {
-	origDocs := newDocsService
-	t.Cleanup(func() { newDocsService = origDocs })
+	t.Parallel()
 
 	docSvc, cleanup := newTabsTestServer(t)
 	defer cleanup()
-	newDocsService = func(context.Context, string) (*docs.Service, error) { return docSvc, nil }
 
-	execResult := runDocsCatCommand(t, []string{"doc1", "--raw"}, false)
+	execResult := runDocsCatCommand(t, docSvc, []string{"doc1", "--raw"}, false)
 	if execResult.err != nil {
 		t.Fatalf("cat --raw: %v", execResult.err)
 	}
@@ -491,14 +485,12 @@ func TestDocsCat_Raw(t *testing.T) {
 }
 
 func TestDocsCat_Raw_AllTabs(t *testing.T) {
-	origDocs := newDocsService
-	t.Cleanup(func() { newDocsService = origDocs })
+	t.Parallel()
 
 	docSvc, cleanup := newTabsTestServer(t)
 	defer cleanup()
-	newDocsService = func(context.Context, string) (*docs.Service, error) { return docSvc, nil }
 
-	execResult := runDocsCatCommand(t, []string{"doc1", "--raw", "--all-tabs"}, false)
+	execResult := runDocsCatCommand(t, docSvc, []string{"doc1", "--raw", "--all-tabs"}, false)
 	if execResult.err != nil {
 		t.Fatalf("cat --raw --all-tabs: %v", execResult.err)
 	}
@@ -515,15 +507,13 @@ func TestDocsCat_Raw_AllTabs(t *testing.T) {
 }
 
 func TestDocsCat_SingleTab(t *testing.T) {
-	origDocs := newDocsService
-	t.Cleanup(func() { newDocsService = origDocs })
+	t.Parallel()
 
 	docSvc, cleanup := newTabsTestServer(t)
 	defer cleanup()
-	newDocsService = func(context.Context, string) (*docs.Service, error) { return docSvc, nil }
 
 	// By title.
-	result := runDocsCatCommand(t, []string{"doc1", "--tab", "Details"}, false)
+	result := runDocsCatCommand(t, docSvc, []string{"doc1", "--tab", "Details"}, false)
 	if result.err != nil {
 		t.Fatalf("cat --tab Details: %v", result.err)
 	}
@@ -536,7 +526,7 @@ func TestDocsCat_SingleTab(t *testing.T) {
 	}
 
 	// By ID.
-	result = runDocsCatCommand(t, []string{"doc1", "--tab", "t.child1"}, false)
+	result = runDocsCatCommand(t, docSvc, []string{"doc1", "--tab", "t.child1"}, false)
 	if result.err != nil {
 		t.Fatalf("cat --tab t.child1: %v", result.err)
 	}
@@ -547,14 +537,12 @@ func TestDocsCat_SingleTab(t *testing.T) {
 }
 
 func TestDocsCat_TabNotFound(t *testing.T) {
-	origDocs := newDocsService
-	t.Cleanup(func() { newDocsService = origDocs })
+	t.Parallel()
 
 	docSvc, cleanup := newTabsTestServer(t)
 	defer cleanup()
-	newDocsService = func(context.Context, string) (*docs.Service, error) { return docSvc, nil }
 
-	result := runDocsCatCommand(t, []string{"doc1", "--tab", "Nonexistent"}, false)
+	result := runDocsCatCommand(t, docSvc, []string{"doc1", "--tab", "Nonexistent"}, false)
 	if result.err == nil || !strings.Contains(result.err.Error(), "tab not found") {
 		t.Fatalf("expected tab not found error, got: %v", result.err)
 	}
@@ -564,14 +552,12 @@ func TestDocsCat_TabNotFound(t *testing.T) {
 }
 
 func TestDocsCat_SingleTab_JSON(t *testing.T) {
-	origDocs := newDocsService
-	t.Cleanup(func() { newDocsService = origDocs })
+	t.Parallel()
 
 	docSvc, cleanup := newTabsTestServer(t)
 	defer cleanup()
-	newDocsService = func(context.Context, string) (*docs.Service, error) { return docSvc, nil }
 
-	execResult := runDocsCatCommand(t, []string{"doc1", "--tab", "Overview"}, true)
+	execResult := runDocsCatCommand(t, docSvc, []string{"doc1", "--tab", "Overview"}, true)
 	if execResult.err != nil {
 		t.Fatalf("cat --tab Overview --json: %v", execResult.err)
 	}
@@ -591,14 +577,12 @@ func TestDocsCat_SingleTab_JSON(t *testing.T) {
 }
 
 func TestDocsCat_CaseInsensitiveTabTitle(t *testing.T) {
-	origDocs := newDocsService
-	t.Cleanup(func() { newDocsService = origDocs })
+	t.Parallel()
 
 	docSvc, cleanup := newTabsTestServer(t)
 	defer cleanup()
-	newDocsService = func(context.Context, string) (*docs.Service, error) { return docSvc, nil }
 
-	result := runDocsCatCommand(t, []string{"doc1", "--tab", "details"}, false)
+	result := runDocsCatCommand(t, docSvc, []string{"doc1", "--tab", "details"}, false)
 	if result.err != nil {
 		t.Fatalf("cat --tab details (lowercase): %v", result.err)
 	}
@@ -609,11 +593,10 @@ func TestDocsCat_CaseInsensitiveTabTitle(t *testing.T) {
 }
 
 func TestDocsCat_BackwardCompatibility(t *testing.T) {
+	t.Parallel()
+
 	// Verify that docs cat without --tab or --all-tabs does NOT send
 	// includeTabsContent parameter (backward compatible).
-	origDocs := newDocsService
-	t.Cleanup(func() { newDocsService = origDocs })
-
 	var gotIncludeTabs bool
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("includeTabsContent") == "true" {
@@ -648,9 +631,7 @@ func TestDocsCat_BackwardCompatibility(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewDocsService: %v", err)
 	}
-	newDocsService = func(context.Context, string) (*docs.Service, error) { return docSvc, nil }
-
-	result := runDocsCatCommand(t, []string{"doc1"}, false)
+	result := runDocsCatCommand(t, docSvc, []string{"doc1"}, false)
 	if result.err != nil {
 		t.Fatalf("cat: %v", result.err)
 	}
@@ -661,10 +642,9 @@ func TestDocsCat_BackwardCompatibility(t *testing.T) {
 }
 
 func TestDocsCat_TabSendsIncludeTabsContent(t *testing.T) {
-	// Verify that --tab sends includeTabsContent=true.
-	origDocs := newDocsService
-	t.Cleanup(func() { newDocsService = origDocs })
+	t.Parallel()
 
+	// Verify that --tab sends includeTabsContent=true.
 	var gotIncludeTabs bool
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("includeTabsContent") == "true" {
@@ -683,9 +663,7 @@ func TestDocsCat_TabSendsIncludeTabsContent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewDocsService: %v", err)
 	}
-	newDocsService = func(context.Context, string) (*docs.Service, error) { return docSvc, nil }
-
-	_ = runDocsCatCommand(t, []string{"doc1", "--tab", "Overview"}, false)
+	_ = runDocsCatCommand(t, docSvc, []string{"doc1", "--tab", "Overview"}, false)
 
 	if !gotIncludeTabs {
 		t.Fatal("--tab should send includeTabsContent=true")
@@ -693,8 +671,7 @@ func TestDocsCat_TabSendsIncludeTabsContent(t *testing.T) {
 }
 
 func TestDocsCreateCopyCat_Text(t *testing.T) {
-	origDocs := newDocsService
-	t.Cleanup(func() { newDocsService = origDocs })
+	t.Parallel()
 
 	export := func(context.Context, *drive.Service, string, string) (*http.Response, error) {
 		return &http.Response{
@@ -779,11 +756,10 @@ func TestDocsCreateCopyCat_Text(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewDocsService: %v", err)
 	}
-	newDocsService = func(context.Context, string) (*docs.Service, error) { return docSvc, nil }
-
 	flags := &RootFlags{Account: "a@b.com"}
 	var stdout, stderr bytes.Buffer
 	ctx := withDriveTestOperations(newCmdRuntimeOutputContext(t, &stdout, &stderr), svc, nil, export)
+	ctx = withDocsTestService(ctx, docSvc)
 
 	createCmd := &DocsCreateCmd{}
 	if err := runKong(t, createCmd, []string{"Doc"}, ctx, flags); err != nil {
