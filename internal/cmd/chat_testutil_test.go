@@ -11,8 +11,6 @@ import (
 	"github.com/steipete/gogcli/internal/app"
 )
 
-var errUnexpectedChatServiceCall = errors.New("unexpected chat service call")
-
 func newChatTestService(t *testing.T, handler http.Handler) *chat.Service {
 	t.Helper()
 	svc, closeServer := newGoogleTestService(t, handler, chat.NewService)

@@ -1,16 +1,11 @@
 package cmd
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"google.golang.org/api/chat/v1"
-	"google.golang.org/api/option"
 )
 
 func TestNormalizeSpace(t *testing.T) {
@@ -198,11 +193,8 @@ func TestNormalizeReaction(t *testing.T) {
 }
 
 func TestExecute_ChatMessagesReactionsCreate_JSON(t *testing.T) {
-	origNew := newChatService
-	t.Cleanup(func() { newChatService = origNew })
-
 	var gotEmoji string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	svc := newChatTestService(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !(r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/reactions")) {
 			http.NotFound(w, r)
 			return
@@ -218,25 +210,10 @@ func TestExecute_ChatMessagesReactionsCreate_JSON(t *testing.T) {
 			"emoji": map[string]any{"unicode": gotEmoji},
 		})
 	}))
-	defer srv.Close()
-
-	svc, err := chat.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
+	result := executeWithChatTestService(t, []string{"--json", "--account", "a@b.com", "chat", "messages", "reactions", "create", "spaces/AAA/messages/msg1", "📦"}, svc)
+	if result.err != nil {
+		t.Fatalf("Execute: %v", result.err)
 	}
-	newChatService = func(context.Context, string) (*chat.Service, error) { return svc, nil }
-
-	out := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
-			if err := Execute([]string{"--json", "--account", "a@b.com", "chat", "messages", "reactions", "create", "spaces/AAA/messages/msg1", "📦"}); err != nil {
-				t.Fatalf("Execute: %v", err)
-			}
-		})
-	})
 
 	if gotEmoji != "📦" {
 		t.Fatalf("unexpected emoji sent: %q", gotEmoji)
@@ -247,7 +224,7 @@ func TestExecute_ChatMessagesReactionsCreate_JSON(t *testing.T) {
 			Name string `json:"name"`
 		} `json:"reaction"`
 	}
-	if err := json.Unmarshal([]byte(out), &parsed); err != nil {
+	if err := json.Unmarshal([]byte(result.stdout), &parsed); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
 	if !strings.Contains(parsed.Reaction.Name, "/reactions/") {
@@ -256,11 +233,8 @@ func TestExecute_ChatMessagesReactionsCreate_JSON(t *testing.T) {
 }
 
 func TestExecute_ChatMessagesReactionsCreate_BareIDWithSpace(t *testing.T) {
-	origNew := newChatService
-	t.Cleanup(func() { newChatService = origNew })
-
 	var gotPath string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	svc := newChatTestService(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !(r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/reactions")) {
 			http.NotFound(w, r)
 			return
@@ -272,25 +246,10 @@ func TestExecute_ChatMessagesReactionsCreate_BareIDWithSpace(t *testing.T) {
 			"emoji": map[string]any{"unicode": "📦"},
 		})
 	}))
-	defer srv.Close()
-
-	svc, err := chat.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
+	result := executeWithChatTestService(t, []string{"--account", "a@b.com", "chat", "messages", "reactions", "create", "msg1", "📦", "--space", "AAA"}, svc)
+	if result.err != nil {
+		t.Fatalf("Execute: %v", result.err)
 	}
-	newChatService = func(context.Context, string) (*chat.Service, error) { return svc, nil }
-
-	_ = captureStdout(t, func() {
-		_ = captureStderr(t, func() {
-			if err := Execute([]string{"--account", "a@b.com", "chat", "messages", "reactions", "create", "msg1", "📦", "--space", "AAA"}); err != nil {
-				t.Fatalf("Execute: %v", err)
-			}
-		})
-	})
 
 	if !strings.Contains(gotPath, "spaces/AAA/messages/msg1") {
 		t.Fatalf("unexpected request path: %q", gotPath)
@@ -298,37 +257,29 @@ func TestExecute_ChatMessagesReactionsCreate_BareIDWithSpace(t *testing.T) {
 }
 
 func TestExecute_ChatMessagesReactionsCreate_InvalidMessageFailsBeforeDryRun(t *testing.T) {
-	origNew := newChatService
-	t.Cleanup(func() { newChatService = origNew })
-	newChatService = func(context.Context, string) (*chat.Service, error) {
-		t.Fatalf("expected validation to fail before creating chat service")
-		return nil, errUnexpectedChatServiceCall
-	}
-
 	testCases := [][]string{
 		{"--account", "a@b.com", "--dry-run", "chat", "messages", "reactions", "create", "spaces/AAA/messages/msg1/extra", "X"},
 		{"--account", "a@b.com", "--dry-run", "chat", "messages", "reactions", "create", "msg1", "X", "--space", "AAA/extra"},
 	}
 	for _, args := range testCases {
 		t.Run(strings.Join(args[4:], "_"), func(t *testing.T) {
-			_ = captureStderr(t, func() {
-				err := Execute(args)
-				var exitErr *ExitError
-				if !errors.As(err, &exitErr) || exitErr.Code != 2 || !strings.Contains(err.Error(), "required: message") {
-					t.Fatalf("unexpected err: %v", err)
-				}
-			})
+			result := executeWithChatTestServiceFactory(
+				t,
+				args,
+				unexpectedChatTestService(t, "expected validation to fail before creating chat service"),
+			)
+			var exitErr *ExitError
+			if !errors.As(result.err, &exitErr) || exitErr.Code != 2 || !strings.Contains(result.err.Error(), "required: message") {
+				t.Fatalf("unexpected err: %v", result.err)
+			}
 		})
 	}
 }
 
 func TestExecute_ChatMessagesReact_Shorthand(t *testing.T) {
-	origNew := newChatService
-	t.Cleanup(func() { newChatService = origNew })
-
 	var gotPath string
 	var gotEmoji string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	svc := newChatTestService(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !(r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/reactions")) {
 			http.NotFound(w, r)
 			return
@@ -345,25 +296,10 @@ func TestExecute_ChatMessagesReact_Shorthand(t *testing.T) {
 			"emoji": map[string]any{"unicode": gotEmoji},
 		})
 	}))
-	defer srv.Close()
-
-	svc, err := chat.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
+	result := executeWithChatTestService(t, []string{"--account", "a@b.com", "chat", "messages", "react", "spaces/AAA/messages/msg1", "📦"}, svc)
+	if result.err != nil {
+		t.Fatalf("Execute: %v", result.err)
 	}
-	newChatService = func(context.Context, string) (*chat.Service, error) { return svc, nil }
-
-	out := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
-			if err := Execute([]string{"--account", "a@b.com", "chat", "messages", "react", "spaces/AAA/messages/msg1", "📦"}); err != nil {
-				t.Fatalf("Execute: %v", err)
-			}
-		})
-	})
 
 	if !strings.Contains(gotPath, "spaces/AAA/messages/msg1/reactions") {
 		t.Fatalf("unexpected request path: %q", gotPath)
@@ -371,19 +307,12 @@ func TestExecute_ChatMessagesReact_Shorthand(t *testing.T) {
 	if gotEmoji != "📦" {
 		t.Fatalf("unexpected emoji sent: %q", gotEmoji)
 	}
-	if !strings.Contains(out, "spaces/AAA/messages/msg1/reactions/r1") {
-		t.Fatalf("unexpected output: %q", out)
+	if !strings.Contains(result.stdout, "spaces/AAA/messages/msg1/reactions/r1") {
+		t.Fatalf("unexpected output: %q", result.stdout)
 	}
 }
 
 func TestExecute_ChatMessagesReactionsDelete_InvalidResourceFailsBeforeDryRun(t *testing.T) {
-	origNew := newChatService
-	t.Cleanup(func() { newChatService = origNew })
-	newChatService = func(context.Context, string) (*chat.Service, error) {
-		t.Fatalf("expected validation to fail before creating chat service")
-		return nil, errUnexpectedChatServiceCall
-	}
-
 	testCases := [][]string{
 		{"--account", "a@b.com", "--dry-run", "chat", "messages", "reactions", "delete", "nope"},
 		{"--account", "a@b.com", "--dry-run", "chat", "messages", "reactions", "delete", "spaces/AAA/messages/msg1"},
@@ -391,26 +320,26 @@ func TestExecute_ChatMessagesReactionsDelete_InvalidResourceFailsBeforeDryRun(t 
 	}
 	for _, args := range testCases {
 		t.Run(strings.Join(args[4:], "_"), func(t *testing.T) {
-			_ = captureStderr(t, func() {
-				err := Execute(args)
-				var exitErr *ExitError
-				if !errors.As(err, &exitErr) || exitErr.Code != 2 || !strings.Contains(err.Error(), "required: reaction resource") {
-					t.Fatalf("unexpected err: %v", err)
-				}
-			})
+			result := executeWithChatTestServiceFactory(
+				t,
+				args,
+				unexpectedChatTestService(t, "expected validation to fail before creating chat service"),
+			)
+			var exitErr *ExitError
+			if !errors.As(result.err, &exitErr) || exitErr.Code != 2 || !strings.Contains(result.err.Error(), "required: reaction resource") {
+				t.Fatalf("unexpected err: %v", result.err)
+			}
 		})
 	}
 }
 
 func TestExecute_ChatMessagesReactionsCreate_ConsumerBlocked(t *testing.T) {
-	origNew := newChatService
-	t.Cleanup(func() { newChatService = origNew })
-	newChatService = func(context.Context, string) (*chat.Service, error) {
-		t.Fatalf("unexpected chat service call")
-		return nil, errUnexpectedChatServiceCall
-	}
-
-	err := Execute([]string{"--account", "user@gmail.com", "chat", "messages", "reactions", "create", "spaces/AAA/messages/msg1", "📦"})
+	result := executeWithChatTestServiceFactory(
+		t,
+		[]string{"--account", "user@gmail.com", "chat", "messages", "reactions", "create", "spaces/AAA/messages/msg1", "📦"},
+		unexpectedChatTestService(t, "unexpected chat service call"),
+	)
+	err := result.err
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -420,10 +349,7 @@ func TestExecute_ChatMessagesReactionsCreate_ConsumerBlocked(t *testing.T) {
 }
 
 func TestExecute_ChatMessagesReactionsList_JSON(t *testing.T) {
-	origNew := newChatService
-	t.Cleanup(func() { newChatService = origNew })
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	svc := newChatTestService(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !(r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/reactions")) {
 			http.NotFound(w, r)
 			return
@@ -440,25 +366,10 @@ func TestExecute_ChatMessagesReactionsList_JSON(t *testing.T) {
 			"nextPageToken": "",
 		})
 	}))
-	defer srv.Close()
-
-	svc, err := chat.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
+	result := executeWithChatTestService(t, []string{"--json", "--account", "a@b.com", "chat", "messages", "reactions", "list", "spaces/AAA/messages/msg1"}, svc)
+	if result.err != nil {
+		t.Fatalf("Execute: %v", result.err)
 	}
-	newChatService = func(context.Context, string) (*chat.Service, error) { return svc, nil }
-
-	out := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
-			if err := Execute([]string{"--json", "--account", "a@b.com", "chat", "messages", "reactions", "list", "spaces/AAA/messages/msg1"}); err != nil {
-				t.Fatalf("Execute: %v", err)
-			}
-		})
-	})
 
 	var parsed struct {
 		Reactions []struct {
@@ -467,7 +378,7 @@ func TestExecute_ChatMessagesReactionsList_JSON(t *testing.T) {
 			User     string `json:"user"`
 		} `json:"reactions"`
 	}
-	if err := json.Unmarshal([]byte(out), &parsed); err != nil {
+	if err := json.Unmarshal([]byte(result.stdout), &parsed); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
 	if len(parsed.Reactions) != 1 || parsed.Reactions[0].Emoji != "📦" || parsed.Reactions[0].User != "Ada" {
@@ -476,19 +387,17 @@ func TestExecute_ChatMessagesReactionsList_JSON(t *testing.T) {
 }
 
 func TestExecute_ChatMessagesReactionsList_InvalidMaxFailsBeforeWorkspaceCheck(t *testing.T) {
-	origNew := newChatService
-	t.Cleanup(func() { newChatService = origNew })
-	newChatService = func(context.Context, string) (*chat.Service, error) {
-		t.Fatalf("expected max validation to fail before creating chat service")
-		return nil, errUnexpectedChatServiceCall
-	}
-
 	for _, args := range [][]string{
 		{"--account", "user@gmail.com", "chat", "messages", "reactions", "list", "spaces/AAA/messages/msg1", "--max", "0"},
 		{"--account", "user@gmail.com", "chat", "messages", "reactions", "list", "spaces/AAA/messages/msg1", "--max=-1"},
 	} {
 		t.Run(strings.Join(args, "_"), func(t *testing.T) {
-			err := Execute(args)
+			result := executeWithChatTestServiceFactory(
+				t,
+				args,
+				unexpectedChatTestService(t, "expected max validation to fail before creating chat service"),
+			)
+			err := result.err
 			if ExitCode(err) != 2 || !strings.Contains(err.Error(), "max must be > 0") {
 				t.Fatalf("unexpected err: %v", err)
 			}
@@ -497,11 +406,8 @@ func TestExecute_ChatMessagesReactionsList_InvalidMaxFailsBeforeWorkspaceCheck(t
 }
 
 func TestExecute_ChatMessagesReactionsDelete_Text(t *testing.T) {
-	origNew := newChatService
-	t.Cleanup(func() { newChatService = origNew })
-
 	var deletedPath string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	svc := newChatTestService(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !(r.Method == http.MethodDelete && strings.Contains(r.URL.Path, "/reactions/")) {
 			http.NotFound(w, r)
 			return
@@ -510,30 +416,15 @@ func TestExecute_ChatMessagesReactionsDelete_Text(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{})
 	}))
-	defer srv.Close()
-
-	svc, err := chat.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
+	result := executeWithChatTestService(t, []string{"--account", "a@b.com", "chat", "messages", "reactions", "delete", "spaces/AAA/messages/msg1/reactions/r1"}, svc)
+	if result.err != nil {
+		t.Fatalf("Execute: %v", result.err)
 	}
-	newChatService = func(context.Context, string) (*chat.Service, error) { return svc, nil }
-
-	out := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
-			if err := Execute([]string{"--account", "a@b.com", "chat", "messages", "reactions", "delete", "spaces/AAA/messages/msg1/reactions/r1"}); err != nil {
-				t.Fatalf("Execute: %v", err)
-			}
-		})
-	})
 
 	if !strings.Contains(deletedPath, "/reactions/r1") {
 		t.Fatalf("unexpected delete path: %q", deletedPath)
 	}
-	if !strings.Contains(out, "spaces/AAA/messages/msg1/reactions/r1") {
-		t.Fatalf("unexpected output: %q", out)
+	if !strings.Contains(result.stdout, "spaces/AAA/messages/msg1/reactions/r1") {
+		t.Fatalf("unexpected output: %q", result.stdout)
 	}
 }
