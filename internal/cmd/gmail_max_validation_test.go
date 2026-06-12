@@ -2,28 +2,20 @@ package cmd
 
 import (
 	"context"
-	"errors"
 	"io"
 	"testing"
 
 	"google.golang.org/api/gmail/v1"
-
-	"github.com/steipete/gogcli/internal/ui"
 )
 
 func TestGmailListMaxValidationBeforeService(t *testing.T) {
-	origNew := newGmailService
-	t.Cleanup(func() { newGmailService = origNew })
-	newGmailService = func(context.Context, string) (*gmail.Service, error) {
-		t.Fatal("gmail service should not be created")
-		return nil, errors.New("service")
-	}
-
-	u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
-	if uiErr != nil {
-		t.Fatalf("ui.New: %v", uiErr)
-	}
-	ctx := ui.WithUI(context.Background(), u)
+	ctx := withGmailTestServiceFactory(
+		newCmdRuntimeOutputContext(t, io.Discard, io.Discard),
+		func(context.Context, string) (*gmail.Service, error) {
+			t.Fatal("gmail service should not be created")
+			return nil, context.Canceled
+		},
+	)
 	flags := &RootFlags{Account: "a@b.com"}
 
 	cases := []struct {
