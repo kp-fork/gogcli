@@ -34,7 +34,7 @@ func (c *TasksListsListCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return err
 	}
 
-	svc, err := newTasksService(ctx, account)
+	svc, err := tasksService(ctx, account)
 	if err != nil {
 		return err
 	}
@@ -106,7 +106,7 @@ func (c *TasksListsCreateCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return err
 	}
 
-	svc, err := newTasksService(ctx, account)
+	svc, err := tasksService(ctx, account)
 	if err != nil {
 		return err
 	}

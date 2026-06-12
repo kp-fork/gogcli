@@ -276,7 +276,7 @@ func buildTasksBackupSnapshot(ctx context.Context, flags *RootFlags, shardMaxRow
 	if err != nil {
 		return backup.Snapshot{}, err
 	}
-	svc, err := newTasksService(ctx, account)
+	svc, err := tasksService(ctx, account)
 	if err != nil {
 		return backup.Snapshot{}, err
 	}

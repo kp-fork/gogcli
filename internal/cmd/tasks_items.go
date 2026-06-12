@@ -50,7 +50,7 @@ func (c *TasksListCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return err
 	}
 
-	svc, err := newTasksService(ctx, account)
+	svc, err := tasksService(ctx, account)
 	if err != nil {
 		return err
 	}
@@ -149,7 +149,7 @@ func (c *TasksGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return usage("empty taskId")
 	}
 
-	svc, err := newTasksService(ctx, account)
+	svc, err := tasksService(ctx, account)
 	if err != nil {
 		return err
 	}
@@ -355,7 +355,7 @@ func (c *TasksAddCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if repeatConfig.Unit == repeatNone {
-		svc, svcErr := newTasksService(ctx, account)
+		svc, svcErr := tasksService(ctx, account)
 		if svcErr != nil {
 			return svcErr
 		}
@@ -409,7 +409,7 @@ func (c *TasksAddCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return usage("repeat produced no occurrences")
 	}
 
-	svc, svcErr := newTasksService(ctx, account)
+	svc, svcErr := tasksService(ctx, account)
 	if svcErr != nil {
 		return svcErr
 	}
@@ -549,7 +549,7 @@ func (c *TasksUpdateCmd) Run(ctx context.Context, kctx *kong.Context, flags *Roo
 		return err
 	}
 
-	svc, err := newTasksService(ctx, account)
+	svc, err := tasksService(ctx, account)
 	if err != nil {
 		return err
 	}
@@ -608,7 +608,7 @@ func (c *TasksDoneCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return err
 	}
 
-	svc, err := newTasksService(ctx, account)
+	svc, err := tasksService(ctx, account)
 	if err != nil {
 		return err
 	}
@@ -657,7 +657,7 @@ func (c *TasksUndoCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return err
 	}
 
-	svc, err := newTasksService(ctx, account)
+	svc, err := tasksService(ctx, account)
 	if err != nil {
 		return err
 	}
@@ -706,7 +706,7 @@ func (c *TasksDeleteCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return err
 	}
 
-	svc, err := newTasksService(ctx, account)
+	svc, err := tasksService(ctx, account)
 	if err != nil {
 		return err
 	}
@@ -746,7 +746,7 @@ func (c *TasksClearCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return err
 	}
 
-	svc, err := newTasksService(ctx, account)
+	svc, err := tasksService(ctx, account)
 	if err != nil {
 		return err
 	}

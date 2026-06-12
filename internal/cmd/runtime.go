@@ -15,6 +15,7 @@ import (
 	"google.golang.org/api/people/v1"
 	"google.golang.org/api/sheets/v4"
 	"google.golang.org/api/slides/v1"
+	"google.golang.org/api/tasks/v1"
 
 	"github.com/steipete/gogcli/internal/app"
 	"github.com/steipete/gogcli/internal/googleapi"
@@ -43,6 +44,7 @@ func newDefaultRuntime() *app.Runtime {
 			PeopleOther:     googleapi.NewPeopleOtherContacts,
 			Sheets:          googleapi.NewSheets,
 			Slides:          googleapi.NewSlides,
+			Tasks:           newTasksService,
 			Zoom:            newZoomMeetingClient,
 			DriveDownload:   driveDownload,
 			DriveExport:     driveExportDownload,
@@ -100,6 +102,9 @@ func normalizedRuntime(runtime *app.Runtime) *app.Runtime {
 	}
 	if normalized.Services.Slides == nil {
 		normalized.Services.Slides = defaults.Services.Slides
+	}
+	if normalized.Services.Tasks == nil {
+		normalized.Services.Tasks = defaults.Services.Tasks
 	}
 	if normalized.Services.Zoom == nil {
 		normalized.Services.Zoom = defaults.Services.Zoom
@@ -216,6 +221,13 @@ func sheetsService(ctx context.Context, account string) (*sheets.Service, error)
 		return runtime.Services.Sheets(ctx, account)
 	}
 	return googleapi.NewSheets(ctx, account)
+}
+
+func tasksService(ctx context.Context, account string) (*tasks.Service, error) {
+	if runtime, ok := app.FromContext(ctx); ok && runtime.Services.Tasks != nil {
+		return runtime.Services.Tasks(ctx, account)
+	}
+	return newTasksService(ctx, account)
 }
 
 func slidesService(ctx context.Context, account string) (*slides.Service, error) {

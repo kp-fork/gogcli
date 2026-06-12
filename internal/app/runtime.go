@@ -14,6 +14,7 @@ import (
 	"google.golang.org/api/people/v1"
 	"google.golang.org/api/sheets/v4"
 	"google.golang.org/api/slides/v1"
+	"google.golang.org/api/tasks/v1"
 
 	"github.com/steipete/gogcli/internal/zoom"
 )
@@ -35,6 +36,7 @@ type (
 	PeopleServiceFactory        func(context.Context, string) (*people.Service, error)
 	SheetsServiceFactory        func(context.Context, string) (*sheets.Service, error)
 	SlidesServiceFactory        func(context.Context, string) (*slides.Service, error)
+	TasksServiceFactory         func(context.Context, string) (*tasks.Service, error)
 	ZoomMeetingClientFactory    func(string) (ZoomMeetingClient, error)
 	DriveDownloadFunc           func(context.Context, *drive.Service, string) (*http.Response, error)
 	DriveExportFunc             func(context.Context, *drive.Service, string, string) (*http.Response, error)
@@ -58,6 +60,7 @@ type Services struct {
 	PeopleOther     PeopleServiceFactory
 	Sheets          SheetsServiceFactory
 	Slides          SlidesServiceFactory
+	Tasks           TasksServiceFactory
 	Zoom            ZoomMeetingClientFactory
 	DriveDownload   DriveDownloadFunc
 	DriveExport     DriveExportFunc
