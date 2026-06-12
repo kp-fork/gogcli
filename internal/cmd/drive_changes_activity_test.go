@@ -22,9 +22,9 @@ func TestDriveChangesStartToken(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"startPageToken": "123"})
 	}))
 	defer closeSrv()
-	stubGoogleTestService(t, &newDriveService, svc)
 
-	if err := (&DriveChangesStartTokenCmd{}).Run(newCmdOutputContext(t, io.Discard, io.Discard), &RootFlags{Account: "a@example.com"}); err != nil {
+	ctx := withDriveTestService(newCmdOutputContext(t, io.Discard, io.Discard), svc)
+	if err := (&DriveChangesStartTokenCmd{}).Run(ctx, &RootFlags{Account: "a@example.com"}); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 }
@@ -47,22 +47,18 @@ func TestDriveChangesList(t *testing.T) {
 		})
 	}))
 	defer closeSrv()
-	stubGoogleTestService(t, &newDriveService, svc)
 
-	if err := (&DriveChangesListCmd{Token: "123", Max: 10, IncludeRemoved: true}).Run(newCmdOutputContext(t, io.Discard, io.Discard), &RootFlags{Account: "a@example.com"}); err != nil {
+	ctx := withDriveTestService(newCmdOutputContext(t, io.Discard, io.Discard), svc)
+	if err := (&DriveChangesListCmd{Token: "123", Max: 10, IncludeRemoved: true}).Run(ctx, &RootFlags{Account: "a@example.com"}); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 }
 
 func TestDriveChangesListInvalidMaxFailsBeforeService(t *testing.T) {
-	origNew := newDriveService
-	t.Cleanup(func() { newDriveService = origNew })
-	newDriveService = func(context.Context, string) (*drive.Service, error) {
+	ctx := withDriveTestServiceFactory(newCmdOutputContext(t, io.Discard, io.Discard), func(context.Context, string) (*drive.Service, error) {
 		t.Fatalf("expected max validation to fail before creating drive service")
 		return nil, errUnexpectedDriveServiceCall
-	}
-
-	ctx := newCmdOutputContext(t, io.Discard, io.Discard)
+	})
 	flags := &RootFlags{Account: "a@example.com"}
 
 	for _, args := range [][]string{{"--token", "123", "--max", "0"}, {"--token", "123", "--max=-1"}} {
@@ -78,12 +74,10 @@ func TestDriveChangesListInvalidMaxFailsBeforeService(t *testing.T) {
 }
 
 func TestDriveChangesWatchValidationBeforeDryRun(t *testing.T) {
-	origNew := newDriveService
-	t.Cleanup(func() { newDriveService = origNew })
-	newDriveService = func(context.Context, string) (*drive.Service, error) {
+	ctx := withDriveTestServiceFactory(newCmdOutputContext(t, io.Discard, io.Discard), func(context.Context, string) (*drive.Service, error) {
 		t.Fatal("drive service should not be created")
 		return nil, context.Canceled
-	}
+	})
 
 	cases := []struct {
 		name string
@@ -105,7 +99,7 @@ func TestDriveChangesWatchValidationBeforeDryRun(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := tc.cmd.Run(newCmdOutputContext(t, io.Discard, io.Discard), &RootFlags{Account: "a@example.com", DryRun: true})
+			err := tc.cmd.Run(ctx, &RootFlags{Account: "a@example.com", DryRun: true})
 			if err == nil {
 				t.Fatal("expected validation error")
 			}

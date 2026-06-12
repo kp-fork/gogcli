@@ -82,3 +82,20 @@ func TestDriveServiceUsesRuntimeFactory(t *testing.T) {
 		t.Fatalf("factory account = %q, want test@example.com", gotAccount)
 	}
 }
+
+func TestCommandIOMergesPartialRuntime(t *testing.T) {
+	t.Parallel()
+
+	var stdout bytes.Buffer
+	ctx := app.WithRuntime(context.Background(), &app.Runtime{
+		IO: app.IO{Out: &stdout},
+	})
+
+	got := commandIO(ctx)
+	if got.Out != &stdout {
+		t.Fatalf("stdout = %T, want injected buffer", got.Out)
+	}
+	if got.In == nil || got.Err == nil {
+		t.Fatalf("commandIO() = %#v, want default input and stderr", got)
+	}
+}

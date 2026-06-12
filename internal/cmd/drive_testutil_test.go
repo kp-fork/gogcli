@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"google.golang.org/api/drive/v3"
+
+	"github.com/steipete/gogcli/internal/app"
 )
 
 func newDriveTestService(t *testing.T, h http.Handler) (*drive.Service, func()) {
@@ -19,6 +21,22 @@ func newDriveTestService(t *testing.T, h http.Handler) (*drive.Service, func()) 
 
 func stubDriveService(svc *drive.Service) func(context.Context, string) (*drive.Service, error) {
 	return func(context.Context, string) (*drive.Service, error) { return svc, nil }
+}
+
+func withDriveTestService(ctx context.Context, svc *drive.Service) context.Context {
+	return withDriveTestServiceFactory(ctx, stubDriveService(svc))
+}
+
+func withDriveTestServiceFactory(ctx context.Context, factory app.DriveServiceFactory) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	runtime := &app.Runtime{}
+	if existing, ok := app.FromContext(ctx); ok {
+		*runtime = *existing
+	}
+	runtime.Services.Drive = factory
+	return app.WithRuntime(ctx, runtime)
 }
 
 func stubDriveServiceForTest(t *testing.T, svc *drive.Service) {

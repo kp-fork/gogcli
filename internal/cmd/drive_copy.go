@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 
 	"google.golang.org/api/drive/v3"
@@ -90,7 +89,7 @@ func copyViaDrive(ctx context.Context, flags *RootFlags, opts copyViaDriveOption
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{strFile: created})
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{strFile: created})
 	}
 	u.Out().Linef("id\t%s", created.Id)
 	u.Out().Linef("name\t%s", created.Name)

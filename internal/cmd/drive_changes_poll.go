@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -200,7 +199,7 @@ func writeDriveChangesPollEvent(ctx context.Context, event driveChangesPollEvent
 			name = change.File.Name
 		}
 		if _, err := fmt.Fprintf(
-			os.Stdout,
+			stdoutWriter(ctx),
 			"change\t%s\t%s\t%s\t%s\t%t\n",
 			change.Time,
 			change.Type,

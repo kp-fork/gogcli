@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/mail"
-	"os"
 	"strings"
 
 	"google.golang.org/api/drive/v3"
@@ -105,7 +104,7 @@ func (c *DriveShareCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{
 			"link":         link,
 			"permissionId": created.Id,
 			"permission":   created,
@@ -323,7 +322,7 @@ func (c *DrivePermissionsCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return err
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{
 			"fileId":          fileID,
 			"permissions":     resp.Permissions,
 			"permissionCount": len(resp.Permissions),
@@ -388,7 +387,7 @@ func (c *DriveURLCmd) Run(ctx context.Context, flags *RootFlags) error {
 			}
 			urls = append(urls, map[string]string{"id": id, "url": link})
 		}
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"urls": urls})
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{"urls": urls})
 	}
 	return nil
 }

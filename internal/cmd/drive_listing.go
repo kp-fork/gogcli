@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"google.golang.org/api/drive/v3"
@@ -118,7 +117,7 @@ func listDriveFiles(ctx context.Context, svc *drive.Service, opts driveFileListO
 func writeDriveFileList(ctx context.Context, resp *drive.FileList, emptyMessage string) error {
 	u := ui.FromContext(ctx)
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{
 			"files":         resp.Files,
 			"nextPageToken": resp.NextPageToken,
 		})

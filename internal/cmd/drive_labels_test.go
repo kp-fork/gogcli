@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -90,6 +91,8 @@ func TestNormalizeDriveLabelName(t *testing.T) {
 }
 
 func TestDriveLabelsFileList_JSON(t *testing.T) {
+	t.Parallel()
+
 	svc, closeSvc := newDriveTestService(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet || r.URL.Path != "/files/file1/listLabels" {
 			http.NotFound(w, r)
@@ -102,27 +105,22 @@ func TestDriveLabelsFileList_JSON(t *testing.T) {
 		})
 	}))
 	defer closeSvc()
-	stubGoogleTestService(t, &newDriveService, svc)
 
-	out := captureStdout(t, func() {
-		if err := (&DriveLabelsFileListCmd{FileID: "file1", Max: 10}).Run(newCalendarJSONContext(t), &RootFlags{Account: "a@example.com"}); err != nil {
-			t.Fatalf("Run: %v", err)
-		}
-	})
-	if !strings.Contains(out, `"labelCount": 1`) || !strings.Contains(out, "label1") {
+	var stdout bytes.Buffer
+	ctx := withDriveTestService(newCmdRuntimeJSONOutputContext(t, &stdout, io.Discard), svc)
+	if err := (&DriveLabelsFileListCmd{FileID: "file1", Max: 10}).Run(ctx, &RootFlags{Account: "a@example.com"}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if out := stdout.String(); !strings.Contains(out, `"labelCount": 1`) || !strings.Contains(out, "label1") {
 		t.Fatalf("unexpected output: %s", out)
 	}
 }
 
 func TestDriveLabelsFileListInvalidMaxFailsBeforeService(t *testing.T) {
-	origNew := newDriveService
-	t.Cleanup(func() { newDriveService = origNew })
-	newDriveService = func(context.Context, string) (*drive.Service, error) {
+	ctx := withDriveTestServiceFactory(newCmdOutputContext(t, io.Discard, io.Discard), func(context.Context, string) (*drive.Service, error) {
 		t.Fatalf("expected max validation to fail before creating drive service")
 		return nil, errUnexpectedDriveServiceCall
-	}
-
-	ctx := newCmdOutputContext(t, io.Discard, io.Discard)
+	})
 	flags := &RootFlags{Account: "a@example.com"}
 
 	for _, args := range [][]string{{"file1", "--max", "0"}, {"file1", "--max=-1"}} {
@@ -160,14 +158,14 @@ func TestDriveLabelsFileApply_BuildsModifyLabelsRequest(t *testing.T) {
 		})
 	}))
 	defer closeSvc()
-	stubGoogleTestService(t, &newDriveService, svc)
 
+	ctx := withDriveTestService(newCmdOutputContext(t, io.Discard, io.Discard), svc)
 	if err := (&DriveLabelsFileApplyCmd{
 		FileID:  "file1",
 		LabelID: "labels/label1",
 		Text:    []string{"title=Project"},
 		Unset:   []string{"old"},
-	}).Run(newCmdOutputContext(t, io.Discard, io.Discard), &RootFlags{Account: "a@example.com", Force: true}); err != nil {
+	}).Run(ctx, &RootFlags{Account: "a@example.com", Force: true}); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 }

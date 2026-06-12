@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 
@@ -95,7 +94,7 @@ func (c *DriveAuditUserCmd) Run(ctx context.Context, flags *RootFlags) error {
 	sortDriveSharingFindings(findings)
 
 	if outfmt.IsJSON(ctx) {
-		err := outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		err := outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{
 			"findings":         findings,
 			"findingCount":     len(findings),
 			"scannedFileCount": len(items),
@@ -164,7 +163,7 @@ func (c *DriveAuditSharingCmd) Run(ctx context.Context, flags *RootFlags) error 
 	sortDriveSharingFindings(findings)
 
 	if outfmt.IsJSON(ctx) {
-		err := outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		err := outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{
 			"findings":         findings,
 			"findingCount":     len(findings),
 			"scannedFileCount": len(items),

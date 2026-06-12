@@ -337,7 +337,7 @@ func writeDriveUploadResult(ctx context.Context, file *drive.File, replaced bool
 			payload["replaced"] = true
 			payload["preservedFileId"] = file.Id == replacedFileID
 		}
-		return outfmt.WriteJSON(ctx, os.Stdout, payload)
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), payload)
 	}
 
 	u.Out().Linef("id\t%s", file.Id)

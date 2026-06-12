@@ -1,7 +1,10 @@
 package cmd
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -38,10 +41,10 @@ func newDriveRawTestServer(t *testing.T, status int, body map[string]any, hit *d
 	}))
 }
 
-func installMockDriveService(t *testing.T, srv *httptest.Server) {
+func driveRawTestContext(t *testing.T, srv *httptest.Server, stdout io.Writer) context.Context {
 	t.Helper()
 	svc := newGoogleTestServiceWithEndpoint(t, srv.Client(), srv.URL+"/", drive.NewService)
-	stubGoogleTestService(t, &newDriveService, svc)
+	return withDriveTestService(newCmdRuntimeOutputContext(t, stdout, io.Discard), svc)
 }
 
 // sensitiveDriveFile returns a File response containing every sensitive
@@ -64,18 +67,18 @@ func sensitiveDriveFile(id string) map[string]any {
 }
 
 func TestDriveRaw_DefaultRedactsSensitiveFields(t *testing.T) {
+	t.Parallel()
+
 	hit := &driveRawHit{}
 	srv := newDriveRawTestServer(t, 0, sensitiveDriveFile("f1"), hit)
 	defer srv.Close()
-	installMockDriveService(t, srv)
 
-	ctx := rawTestContext(t)
+	var stdout bytes.Buffer
+	ctx := driveRawTestContext(t, srv, &stdout)
 	flags := &RootFlags{Account: "a@b.com"}
-	out := captureStdout(t, func() {
-		if err := runKong(t, &DriveRawCmd{}, []string{"f1"}, ctx, flags); err != nil {
-			t.Fatalf("run: %v", err)
-		}
-	})
+	if err := runKong(t, &DriveRawCmd{}, []string{"f1"}, ctx, flags); err != nil {
+		t.Fatalf("run: %v", err)
+	}
 
 	// Default must request fields=* from the API.
 	if got, _ := hit.lastFields.Load().(string); got != "*" {
@@ -83,8 +86,8 @@ func TestDriveRaw_DefaultRedactsSensitiveFields(t *testing.T) {
 	}
 
 	var fileOut map[string]any
-	if err := json.Unmarshal([]byte(out), &fileOut); err != nil {
-		t.Fatalf("invalid JSON: %v\nraw: %s", err, out)
+	if err := json.Unmarshal(stdout.Bytes(), &fileOut); err != nil {
+		t.Fatalf("invalid JSON: %v\nraw: %s", err, stdout.String())
 	}
 	// Safe fields remain.
 	if fileOut["id"] != "f1" {
@@ -102,18 +105,18 @@ func TestDriveRaw_DefaultRedactsSensitiveFields(t *testing.T) {
 }
 
 func TestDriveRaw_ExplicitFieldsHonorsUserChoice(t *testing.T) {
+	t.Parallel()
+
 	hit := &driveRawHit{}
 	srv := newDriveRawTestServer(t, 0, sensitiveDriveFile("f1"), hit)
 	defer srv.Close()
-	installMockDriveService(t, srv)
 
-	ctx := rawTestContext(t)
+	var stdout bytes.Buffer
+	ctx := driveRawTestContext(t, srv, &stdout)
 	flags := &RootFlags{Account: "a@b.com"}
-	out := captureStdout(t, func() {
-		if err := runKong(t, &DriveRawCmd{}, []string{"f1", "--fields", "id,name,thumbnailLink"}, ctx, flags); err != nil {
-			t.Fatalf("run: %v", err)
-		}
-	})
+	if err := runKong(t, &DriveRawCmd{}, []string{"f1", "--fields", "id,name,thumbnailLink"}, ctx, flags); err != nil {
+		t.Fatalf("run: %v", err)
+	}
 
 	// The Google client library can munge the fields value slightly, but it
 	// must contain the user's requested field names.
@@ -123,8 +126,8 @@ func TestDriveRaw_ExplicitFieldsHonorsUserChoice(t *testing.T) {
 	}
 
 	var fileOut map[string]any
-	if err := json.Unmarshal([]byte(out), &fileOut); err != nil {
-		t.Fatalf("invalid JSON: %v\nraw: %s", err, out)
+	if err := json.Unmarshal(stdout.Bytes(), &fileOut); err != nil {
+		t.Fatalf("invalid JSON: %v\nraw: %s", err, stdout.String())
 	}
 	// User-named field must NOT be redacted.
 	if fileOut["thumbnailLink"] != "https://drive.google.com/thumb/XYZ?token=LEAK" {
@@ -133,34 +136,34 @@ func TestDriveRaw_ExplicitFieldsHonorsUserChoice(t *testing.T) {
 }
 
 func TestDriveRaw_APIError(t *testing.T) {
+	t.Parallel()
+
 	srv := newDriveRawTestServer(t, http.StatusInternalServerError, nil, nil)
 	defer srv.Close()
-	installMockDriveService(t, srv)
 
-	ctx := rawTestContext(t)
+	ctx := driveRawTestContext(t, srv, io.Discard)
 	flags := &RootFlags{Account: "a@b.com"}
-	_ = captureStdout(t, func() {
-		if err := runKong(t, &DriveRawCmd{}, []string{"f1"}, ctx, flags); err == nil {
-			t.Fatalf("expected error on 500")
-		}
-	})
+	if err := runKong(t, &DriveRawCmd{}, []string{"f1"}, ctx, flags); err == nil {
+		t.Fatalf("expected error on 500")
+	}
 }
 
 func TestDriveRaw_NotFound(t *testing.T) {
+	t.Parallel()
+
 	srv := newDriveRawTestServer(t, http.StatusNotFound, nil, nil)
 	defer srv.Close()
-	installMockDriveService(t, srv)
 
-	ctx := rawTestContext(t)
+	ctx := driveRawTestContext(t, srv, io.Discard)
 	flags := &RootFlags{Account: "a@b.com"}
-	_ = captureStdout(t, func() {
-		if err := runKong(t, &DriveRawCmd{}, []string{"f1"}, ctx, flags); err == nil {
-			t.Fatalf("expected error on 404")
-		}
-	})
+	if err := runKong(t, &DriveRawCmd{}, []string{"f1"}, ctx, flags); err == nil {
+		t.Fatalf("expected error on 404")
+	}
 }
 
 func TestDriveRaw_EmptyID(t *testing.T) {
+	t.Parallel()
+
 	ctx := rawTestContext(t)
 	flags := &RootFlags{Account: "a@b.com"}
 	if err := (&DriveRawCmd{}).Run(ctx, flags); err == nil {

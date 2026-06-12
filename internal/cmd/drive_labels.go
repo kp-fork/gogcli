@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -77,7 +76,7 @@ func (c *DriveLabelsFileListCmd) Run(ctx context.Context, flags *RootFlags) erro
 		return err
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{
 			"labels":        resp.Labels,
 			"labelCount":    len(resp.Labels),
 			"nextPageToken": resp.NextPageToken,
@@ -144,7 +143,7 @@ func (c *DriveLabelsFileApplyCmd) Run(ctx context.Context, flags *RootFlags) err
 		return err
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"modifiedLabels": resp.ModifiedLabels})
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{"modifiedLabels": resp.ModifiedLabels})
 	}
 	return writeResult(ctx, u, kv("applied", true), kv("fileId", fileID), kv("labelId", labelID))
 }
@@ -185,7 +184,7 @@ func (c *DriveLabelsFileRemoveCmd) Run(ctx context.Context, flags *RootFlags) er
 		return err
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"modifiedLabels": resp.ModifiedLabels})
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{"modifiedLabels": resp.ModifiedLabels})
 	}
 	return writeResult(ctx, u, kv("removed", true), kv("fileId", fileID), kv("labelId", labelID))
 }
@@ -230,7 +229,7 @@ func (c *DriveLabelsListCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{
 			"labels":        resp.Labels,
 			"labelCount":    len(resp.Labels),
 			"nextPageToken": resp.NextPageToken,
@@ -296,7 +295,7 @@ func (c *DriveLabelsGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return wrapDriveLabelsError(err)
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"label": label})
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{"label": label})
 	}
 
 	u.Out().Linef("name\t%s", label.Name)

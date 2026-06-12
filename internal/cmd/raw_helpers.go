@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"errors"
-	"os"
 
 	"github.com/steipete/gogcli/internal/outfmt"
 )
@@ -16,5 +15,5 @@ func requireRawResponse[T any](response *T, notFoundMessage string) (*T, error) 
 }
 
 func writeRawJSON(ctx context.Context, value any, pretty bool) error {
-	return outfmt.WriteRaw(ctx, os.Stdout, value, outfmt.RawOptions{Pretty: pretty})
+	return outfmt.WriteRaw(ctx, stdoutWriter(ctx), value, outfmt.RawOptions{Pretty: pretty})
 }

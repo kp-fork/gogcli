@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/url"
-	"os"
 	"strings"
 
 	"google.golang.org/api/drive/v3"
@@ -43,7 +42,7 @@ func (c *DriveChangesStartTokenCmd) Run(ctx context.Context, flags *RootFlags) e
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"startPageToken": startPageToken})
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{"startPageToken": startPageToken})
 	}
 	u.Out().Linef("startPageToken\t%s", startPageToken)
 	return nil
@@ -279,7 +278,7 @@ func (c *DriveChangesWatchCmd) Run(ctx context.Context, flags *RootFlags) error 
 		return err
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"channel": resp})
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{"channel": resp})
 	}
 	u.Out().Linef("id\t%s", resp.Id)
 	u.Out().Linef("resourceId\t%s", resp.ResourceId)
@@ -324,7 +323,7 @@ func (c *DriveChangesStopCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return err
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"stopped": true, "channelId": channelID, "resourceId": resourceID})
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{"stopped": true, "channelId": channelID, "resourceId": resourceID})
 	}
 	u.Out().Linef("stopped\ttrue")
 	return nil

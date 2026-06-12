@@ -49,10 +49,19 @@ func normalizedRuntime(runtime *app.Runtime) *app.Runtime {
 }
 
 func commandIO(ctx context.Context) app.IO {
+	commandIO := newDefaultRuntime().IO
 	if runtimeIO, ok := app.IOFromContext(ctx); ok {
-		return runtimeIO
+		if runtimeIO.In != nil {
+			commandIO.In = runtimeIO.In
+		}
+		if runtimeIO.Out != nil {
+			commandIO.Out = runtimeIO.Out
+		}
+		if runtimeIO.Err != nil {
+			commandIO.Err = runtimeIO.Err
+		}
 	}
-	return newDefaultRuntime().IO
+	return commandIO
 }
 
 func stdoutWriter(ctx context.Context) io.Writer {

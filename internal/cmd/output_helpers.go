@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"io"
-	"os"
 	"text/tabwriter"
 
 	"github.com/steipete/gogcli/internal/outfmt"
@@ -20,10 +19,11 @@ func kv(key string, value any) resultKV {
 }
 
 func tableWriter(ctx context.Context) (io.Writer, func()) {
+	stdout := stdoutWriter(ctx)
 	if outfmt.IsPlain(ctx) {
-		return os.Stdout, func() {}
+		return stdout, func() {}
 	}
-	tw := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
+	tw := tabwriter.NewWriter(stdout, 0, 4, 2, ' ', 0)
 	return tw, func() { _ = tw.Flush() }
 }
 
@@ -33,7 +33,7 @@ func writeResult(ctx context.Context, u *ui.UI, kvs ...resultKV) error {
 		for _, kv := range kvs {
 			m[kv.Key] = kv.Value
 		}
-		return outfmt.WriteJSON(ctx, os.Stdout, m)
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), m)
 	}
 	if u == nil {
 		return nil

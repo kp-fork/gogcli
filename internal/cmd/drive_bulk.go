@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"google.golang.org/api/drive/v3"
@@ -214,7 +213,7 @@ func driveBulkScanRequest(fileID, parent string, depth, maxItems int, allDrives 
 
 func writeDriveBulkResult(ctx context.Context, u *ui.UI, plans []driveBulkPermissionPlan, truncated bool) error {
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{
 			"items":     plans,
 			"count":     len(plans),
 			"truncated": truncated,

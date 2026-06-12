@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"regexp"
 	"strings"
 
@@ -140,7 +139,7 @@ func (c *DriveGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{strFile: f})
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{strFile: f})
 	}
 
 	u.Out().Linef("id\t%s", f.Id)
@@ -223,7 +222,7 @@ func (c *DriveMkdirCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"folder": created})
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{"folder": created})
 	}
 
 	u.Out().Linef("id\t%s", created.Id)
@@ -346,7 +345,7 @@ func (c *DriveMoveCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{strFile: updated})
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{strFile: updated})
 	}
 
 	u.Out().Linef("id\t%s", updated.Id)
@@ -396,7 +395,7 @@ func (c *DriveRenameCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{strFile: updated})
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{strFile: updated})
 	}
 
 	u.Out().Linef("id\t%s", updated.Id)

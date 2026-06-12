@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"path"
 	"strings"
 
@@ -55,7 +54,7 @@ func (c *DriveTreeCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{
 			"items":     items,
 			"truncated": truncated,
 		})
@@ -146,7 +145,7 @@ func (c *DriveInventoryCmd) Run(ctx context.Context, flags *RootFlags) error {
 	sortDriveInventory(items, c.Sort, c.Order)
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{
 			"items":     items,
 			"truncated": truncated,
 		})
@@ -251,7 +250,7 @@ func (c *DriveDuCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{
 			"folders": summaries,
 		})
 	}
