@@ -89,12 +89,7 @@ func TestDriveGetCmd_TextWithDetailsAndJSON(t *testing.T) {
 }
 
 func TestDriveDownloadCmd_GoogleDoc_JSON(t *testing.T) {
-	origExport := driveExportDownload
-	t.Cleanup(func() {
-		driveExportDownload = origExport
-	})
-
-	driveExportDownload = func(context.Context, *drive.Service, string, string) (*http.Response, error) {
+	export := func(context.Context, *drive.Service, string, string) (*http.Response, error) {
 		return &http.Response{
 			StatusCode: http.StatusOK,
 			Body:       io.NopCloser(strings.NewReader("docdata")),
@@ -131,7 +126,7 @@ func TestDriveDownloadCmd_GoogleDoc_JSON(t *testing.T) {
 	flags := &RootFlags{Account: "a@b.com"}
 	dest := filepath.Join(t.TempDir(), "out.bin")
 	var out bytes.Buffer
-	ctx := withDriveTestService(newCmdRuntimeJSONOutputContext(t, &out, io.Discard), svc)
+	ctx := withDriveTestOperations(newCmdRuntimeJSONOutputContext(t, &out, io.Discard), svc, nil, export)
 	cmd := &DriveDownloadCmd{}
 	if execErr := runKong(t, cmd, []string{"doc1", "--out", dest}, ctx, flags); execErr != nil {
 		t.Fatalf("download: %v", execErr)

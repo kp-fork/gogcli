@@ -17,12 +17,7 @@ import (
 )
 
 func TestDriveGetDownloadUploadURL_JSON(t *testing.T) {
-	origDownload := driveDownload
-	t.Cleanup(func() {
-		driveDownload = origDownload
-	})
-
-	driveDownload = func(context.Context, *drive.Service, string) (*http.Response, error) {
+	download := func(context.Context, *drive.Service, string) (*http.Response, error) {
 		return &http.Response{
 			StatusCode: http.StatusOK,
 			Body:       io.NopCloser(strings.NewReader("filedata")),
@@ -77,7 +72,7 @@ func TestDriveGetDownloadUploadURL_JSON(t *testing.T) {
 
 	flags := &RootFlags{Account: "a@b.com", Force: true}
 	var stdout bytes.Buffer
-	ctx := withDriveTestService(newCmdRuntimeJSONOutputContext(t, &stdout, io.Discard), svc)
+	ctx := withDriveTestOperations(newCmdRuntimeJSONOutputContext(t, &stdout, io.Discard), svc, download, nil)
 
 	cmd := &DriveGetCmd{}
 	if err := runKong(t, cmd, []string{"file1"}, ctx, flags); err != nil {

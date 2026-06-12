@@ -196,11 +196,11 @@ func validateDriveDownloadFormatForFile(meta *drive.File, format string) error {
 	return usagef("--format %q not supported for non-Google Workspace files (mimeType=%q); file can only be downloaded as-is", format, meta.MimeType)
 }
 
-var driveDownload = func(ctx context.Context, svc *drive.Service, fileID string) (*http.Response, error) {
+func driveDownload(ctx context.Context, svc *drive.Service, fileID string) (*http.Response, error) {
 	return svc.Files.Get(fileID).SupportsAllDrives(true).Context(ctx).Download()
 }
 
-var driveExportDownload = func(ctx context.Context, svc *drive.Service, fileID string, mimeType string) (*http.Response, error) {
+func driveExportDownload(ctx context.Context, svc *drive.Service, fileID string, mimeType string) (*http.Response, error) {
 	return svc.Files.Export(fileID, mimeType).Context(ctx).Download()
 }
 

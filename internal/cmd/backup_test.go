@@ -911,13 +911,12 @@ func TestDriveBackupContentPlansPreferReadableWorkspaceFormats(t *testing.T) {
 }
 
 func TestDownloadDriveBackupContentHonorsTimeout(t *testing.T) {
-	origExport := driveExportDownload
-	t.Cleanup(func() { driveExportDownload = origExport })
-	driveExportDownload = func(ctx context.Context, _ *drive.Service, _, _ string) (*http.Response, error) {
+	export := func(ctx context.Context, _ *drive.Service, _, _ string) (*http.Response, error) {
 		<-ctx.Done()
 		return nil, ctx.Err()
 	}
-	_, err := downloadDriveBackupContent(t.Context(), nil, &drive.File{Id: "doc1"}, driveBackupContentPlan{
+	ctx := withDriveTestOperations(t.Context(), nil, nil, export)
+	_, err := downloadDriveBackupContent(ctx, nil, &drive.File{Id: "doc1"}, driveBackupContentPlan{
 		MimeType: mimePDF,
 		Source:   "export",
 	}, time.Millisecond)

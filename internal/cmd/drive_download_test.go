@@ -58,11 +58,8 @@ func TestDownloadDriveFile_NonGoogleDoc(t *testing.T) {
 }
 
 func TestDownloadDriveFile_NonGoogleDocFormatRejected(t *testing.T) {
-	origDownload := driveDownload
-	t.Cleanup(func() { driveDownload = origDownload })
-
 	called := false
-	driveDownload = func(context.Context, *drive.Service, string) (*http.Response, error) {
+	download := func(context.Context, *drive.Service, string) (*http.Response, error) {
 		called = true
 		return &http.Response{
 			Status:     "200 OK",
@@ -72,7 +69,8 @@ func TestDownloadDriveFile_NonGoogleDocFormatRejected(t *testing.T) {
 	}
 
 	dest := filepath.Join(t.TempDir(), "file.html")
-	_, _, err := downloadDriveFile(context.Background(), &drive.Service{}, &drive.File{Id: "id1", MimeType: "application/pdf"}, dest, "html")
+	ctx := withDriveTestOperations(context.Background(), &drive.Service{}, download, nil)
+	_, _, err := downloadDriveFile(ctx, &drive.Service{}, &drive.File{Id: "id1", MimeType: "application/pdf"}, dest, "html")
 	if err == nil {
 		t.Fatalf("expected error")
 	}
@@ -131,9 +129,7 @@ func TestDownloadDriveFile_GoogleDocExport(t *testing.T) {
 }
 
 func TestDownloadDriveFile_HTTPError(t *testing.T) {
-	orig := driveDownload
-	t.Cleanup(func() { driveDownload = orig })
-	driveDownload = func(context.Context, *drive.Service, string) (*http.Response, error) {
+	download := func(context.Context, *drive.Service, string) (*http.Response, error) {
 		return &http.Response{
 			Status:     "403 Forbidden",
 			StatusCode: http.StatusForbidden,
@@ -143,7 +139,8 @@ func TestDownloadDriveFile_HTTPError(t *testing.T) {
 
 	tmp := t.TempDir()
 	dest := filepath.Join(tmp, "file.bin")
-	_, _, err := downloadDriveFile(context.Background(), &drive.Service{}, &drive.File{Id: "id1", MimeType: "application/pdf"}, dest, "")
+	ctx := withDriveTestOperations(context.Background(), &drive.Service{}, download, nil)
+	_, _, err := downloadDriveFile(ctx, &drive.Service{}, &drive.File{Id: "id1", MimeType: "application/pdf"}, dest, "")
 	if err == nil {
 		t.Fatalf("expected error")
 	}
@@ -153,9 +150,7 @@ func TestDownloadDriveFile_HTTPError(t *testing.T) {
 }
 
 func TestDownloadDriveFile_CreatesMissingParentDirs(t *testing.T) {
-	orig := driveDownload
-	t.Cleanup(func() { driveDownload = orig })
-	driveDownload = func(context.Context, *drive.Service, string) (*http.Response, error) {
+	download := func(context.Context, *drive.Service, string) (*http.Response, error) {
 		return &http.Response{
 			Status:     "200 OK",
 			StatusCode: http.StatusOK,
@@ -165,7 +160,8 @@ func TestDownloadDriveFile_CreatesMissingParentDirs(t *testing.T) {
 
 	tmp := t.TempDir()
 	dest := filepath.Join(tmp, "no-such-dir", "file.bin")
-	outPath, size, err := downloadDriveFile(context.Background(), &drive.Service{}, &drive.File{Id: "id1", MimeType: "application/pdf"}, dest, "")
+	ctx := withDriveTestOperations(context.Background(), &drive.Service{}, download, nil)
+	outPath, size, err := downloadDriveFile(ctx, &drive.Service{}, &drive.File{Id: "id1", MimeType: "application/pdf"}, dest, "")
 	if err != nil {
 		t.Fatalf("downloadDriveFile: %v", err)
 	}

@@ -421,12 +421,7 @@ func TestDriveShare_DryRunSkipsPermissionCreate(t *testing.T) {
 }
 
 func TestDriveDownload_TextOutput(t *testing.T) {
-	origDownload := driveDownload
-	t.Cleanup(func() {
-		driveDownload = origDownload
-	})
-
-	driveDownload = func(context.Context, *drive.Service, string) (*http.Response, error) {
+	download := func(context.Context, *drive.Service, string) (*http.Response, error) {
 		return &http.Response{
 			StatusCode: http.StatusOK,
 			Body:       io.NopCloser(strings.NewReader("data")),
@@ -456,7 +451,7 @@ func TestDriveDownload_TextOutput(t *testing.T) {
 	}
 
 	var outBuf bytes.Buffer
-	ctx := withDriveTestService(newCmdRuntimeOutputContext(t, &outBuf, io.Discard), svc)
+	ctx := withDriveTestOperations(newCmdRuntimeOutputContext(t, &outBuf, io.Discard), svc, download, nil)
 	flags := &RootFlags{Account: "a@b.com"}
 
 	dest := filepath.Join(t.TempDir(), "out.txt")
@@ -473,24 +468,18 @@ func TestDriveDownload_TextOutput(t *testing.T) {
 }
 
 func TestDownloadDriveFile_ErrorPaths(t *testing.T) {
-	origDownload := driveDownload
-	origExport := driveExportDownload
-	t.Cleanup(func() {
-		driveDownload = origDownload
-		driveExportDownload = origExport
-	})
-
-	driveDownload = func(context.Context, *drive.Service, string) (*http.Response, error) {
+	download := func(context.Context, *drive.Service, string) (*http.Response, error) {
 		return nil, errors.New("download boom")
 	}
-	driveExportDownload = func(context.Context, *drive.Service, string, string) (*http.Response, error) {
+	export := func(context.Context, *drive.Service, string, string) (*http.Response, error) {
 		return nil, errors.New("export boom")
 	}
 
-	if _, _, err := downloadDriveFile(context.Background(), &drive.Service{}, &drive.File{Id: "x", MimeType: "text/plain"}, "out", ""); err == nil {
+	ctx := withDriveTestOperations(context.Background(), &drive.Service{}, download, export)
+	if _, _, err := downloadDriveFile(ctx, &drive.Service{}, &drive.File{Id: "x", MimeType: "text/plain"}, "out", ""); err == nil {
 		t.Fatalf("expected download error")
 	}
-	if _, _, err := downloadDriveFile(context.Background(), &drive.Service{}, &drive.File{Id: "x", MimeType: driveMimeGoogleDoc}, "out", ""); err == nil {
+	if _, _, err := downloadDriveFile(ctx, &drive.Service{}, &drive.File{Id: "x", MimeType: driveMimeGoogleDoc}, "out", ""); err == nil {
 		t.Fatalf("expected export error")
 	}
 }

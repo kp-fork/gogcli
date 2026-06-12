@@ -205,11 +205,8 @@ func TestDriveExportMimeTypeForFormat(t *testing.T) {
 func TestDownloadDriveFile_InvalidExportFormat(t *testing.T) {
 	t.Parallel()
 
-	origExport := driveExportDownload
-	t.Cleanup(func() { driveExportDownload = origExport })
-
 	called := false
-	driveExportDownload = func(context.Context, *drive.Service, string, string) (*http.Response, error) {
+	export := func(context.Context, *drive.Service, string, string) (*http.Response, error) {
 		called = true
 		return &http.Response{
 			Status:     "200 OK",
@@ -219,7 +216,8 @@ func TestDownloadDriveFile_InvalidExportFormat(t *testing.T) {
 	}
 
 	dest := filepath.Join(t.TempDir(), "out")
-	_, _, err := downloadDriveFile(context.Background(), &drive.Service{}, &drive.File{
+	ctx := withDriveTestOperations(context.Background(), &drive.Service{}, nil, export)
+	_, _, err := downloadDriveFile(ctx, &drive.Service{}, &drive.File{
 		Id:       "id1",
 		MimeType: "application/vnd.google-apps.document",
 	}, dest, "xlsx")
