@@ -113,7 +113,7 @@ func (c *SlidesInsertImageCmd) Run(ctx context.Context, flags *RootFlags) error 
 		return fmt.Errorf("slide %q not found in presentation", slideID)
 	}
 
-	driveSvc, err := newDriveService(ctx, account)
+	driveSvc, err := driveService(ctx, account)
 	if err != nil {
 		return err
 	}

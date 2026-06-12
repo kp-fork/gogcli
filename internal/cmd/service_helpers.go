@@ -22,7 +22,7 @@ func requireDocsService(ctx context.Context, flags *RootFlags) (*docs.Service, e
 }
 
 func requireDriveService(ctx context.Context, flags *RootFlags) (string, *drive.Service, error) {
-	return requireGoogleService(ctx, flags, newDriveService)
+	return requireGoogleService(ctx, flags, driveService)
 }
 
 func requireDriveActivityService(ctx context.Context, flags *RootFlags) (string, *driveactivity.Service, error) {

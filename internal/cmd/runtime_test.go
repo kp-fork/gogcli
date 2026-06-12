@@ -2,9 +2,12 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"google.golang.org/api/drive/v3"
 
 	"github.com/steipete/gogcli/internal/app"
 )
@@ -52,5 +55,30 @@ func TestExecuteRuntimeRoutesEarlyErrors(t *testing.T) {
 	}
 	if stdout.Len() != 0 {
 		t.Fatalf("stdout = %q, want empty", stdout.String())
+	}
+}
+
+func TestDriveServiceUsesRuntimeFactory(t *testing.T) {
+	t.Parallel()
+
+	want := &drive.Service{}
+	var gotAccount string
+	runtime := &app.Runtime{Services: app.Services{
+		Drive: func(_ context.Context, account string) (*drive.Service, error) {
+			gotAccount = account
+			return want, nil
+		},
+	}}
+	ctx := app.WithRuntime(context.Background(), runtime)
+
+	got, err := driveService(ctx, "test@example.com")
+	if err != nil {
+		t.Fatalf("driveService() error = %v", err)
+	}
+	if got != want {
+		t.Fatalf("driveService() = %p, want %p", got, want)
+	}
+	if gotAccount != "test@example.com" {
+		t.Fatalf("factory account = %q, want test@example.com", gotAccount)
 	}
 }

@@ -719,7 +719,7 @@ func (c *SheetsCreateCmd) Run(ctx context.Context, flags *RootFlags) error {
 	movedToParent := false
 	moveError := ""
 	if parent != "" {
-		parentDriveSvc, driveErr := newDriveService(ctx, account)
+		parentDriveSvc, driveErr := driveService(ctx, account)
 		if driveErr == nil {
 			var meta *drive.File
 			meta, driveErr = parentDriveSvc.Files.Get(resp.SpreadsheetId).

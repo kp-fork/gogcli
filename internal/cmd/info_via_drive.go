@@ -35,7 +35,7 @@ func infoViaDrive(ctx context.Context, flags *RootFlags, opts infoViaDriveOption
 		return usage(fmt.Sprintf("empty %s", argName))
 	}
 
-	svc, err := newDriveService(ctx, account)
+	svc, err := driveService(ctx, account)
 	if err != nil {
 		return err
 	}

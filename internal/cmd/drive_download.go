@@ -53,7 +53,7 @@ func (c *DriveDownloadCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return err
 	}
 
-	svc, err := newDriveService(ctx, account)
+	svc, err := driveService(ctx, account)
 	if err != nil {
 		return err
 	}

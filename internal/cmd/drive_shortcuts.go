@@ -45,7 +45,7 @@ func (c *DriveShortcutCreateCmd) Run(ctx context.Context, flags *RootFlags) erro
 	if err != nil {
 		return err
 	}
-	svc, err := newDriveService(ctx, account)
+	svc, err := driveService(ctx, account)
 	if err != nil {
 		return err
 	}

@@ -106,7 +106,7 @@ func (c *DocsInsertImageCmd) Run(ctx context.Context, flags *RootFlags) error {
 	if source.imageURL != "" {
 		result, err = c.runURL(ctx, docsSvc, docID, source.imageURL, at)
 	} else {
-		driveSvc, driveErr := newDriveService(ctx, account)
+		driveSvc, driveErr := driveService(ctx, account)
 		if driveErr != nil {
 			return driveErr
 		}

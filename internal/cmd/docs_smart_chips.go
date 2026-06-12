@@ -105,7 +105,7 @@ func (c *DocsInsertFileChipCmd) Run(ctx context.Context, flags *RootFlags) error
 	if err != nil {
 		return err
 	}
-	driveSvc, err := newDriveService(ctx, account)
+	driveSvc, err := driveService(ctx, account)
 	if err != nil {
 		return err
 	}

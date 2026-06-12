@@ -64,7 +64,7 @@ func (c *SlidesCreateFromTemplateCmd) Run(ctx context.Context, flags *RootFlags)
 	}
 
 	// Create Drive service to copy the template
-	driveSvc, err := newDriveService(ctx, account)
+	driveSvc, err := driveService(ctx, account)
 	if err != nil {
 		return err
 	}

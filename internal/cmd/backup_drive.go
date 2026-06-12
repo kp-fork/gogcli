@@ -30,7 +30,7 @@ func buildDriveBackupSnapshot(ctx context.Context, flags *RootFlags, opts driveB
 	if err != nil {
 		return backup.Snapshot{}, err
 	}
-	svc, err := newDriveService(ctx, account)
+	svc, err := driveService(ctx, account)
 	if err != nil {
 		return backup.Snapshot{}, err
 	}

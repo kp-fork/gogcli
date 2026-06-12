@@ -5,9 +5,14 @@ import (
 	"io"
 	"os"
 
+	"google.golang.org/api/drive/v3"
+
 	"github.com/steipete/gogcli/internal/app"
 	"github.com/steipete/gogcli/internal/googleapi"
 )
+
+// Mutable until legacy command tests inject services through Runtime.
+var newDriveService = googleapi.NewDrive
 
 func newDefaultRuntime() *app.Runtime {
 	return &app.Runtime{
@@ -17,7 +22,7 @@ func newDefaultRuntime() *app.Runtime {
 			Err: os.Stderr,
 		},
 		Services: app.Services{
-			Drive: googleapi.NewDrive,
+			Drive: newDriveService,
 		},
 	}
 }
@@ -52,4 +57,11 @@ func commandIO(ctx context.Context) app.IO {
 
 func stdoutWriter(ctx context.Context) io.Writer {
 	return commandIO(ctx).Out
+}
+
+func driveService(ctx context.Context, account string) (*drive.Service, error) {
+	if runtime, ok := app.FromContext(ctx); ok && runtime.Services.Drive != nil {
+		return runtime.Services.Drive(ctx, account)
+	}
+	return newDriveService(ctx, account)
 }
