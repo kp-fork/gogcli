@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"google.golang.org/api/sheets/v4"
@@ -38,7 +37,7 @@ func runSheetsMutation(
 		return err
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, jsonPayload)
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), jsonPayload)
 	}
 	u.Out().Linef("%s", text)
 	return nil
