@@ -27,7 +27,7 @@ func newDefaultRuntime() *app.Runtime {
 			Drive:          googleapi.NewDrive,
 			Gmail:          googleapi.NewGmail,
 			PeopleContacts: newPeopleContactsService,
-			Sheets:         newSheetsService,
+			Sheets:         googleapi.NewSheets,
 			Slides:         googleapi.NewSlides,
 			DriveDownload:  driveDownload,
 			DriveExport:    driveExportDownload,
@@ -123,7 +123,7 @@ func sheetsService(ctx context.Context, account string) (*sheets.Service, error)
 	if runtime, ok := app.FromContext(ctx); ok && runtime.Services.Sheets != nil {
 		return runtime.Services.Sheets(ctx, account)
 	}
-	return newSheetsService(ctx, account)
+	return googleapi.NewSheets(ctx, account)
 }
 
 func slidesService(ctx context.Context, account string) (*slides.Service, error) {

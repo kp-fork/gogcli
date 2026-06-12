@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -10,14 +11,10 @@ import (
 	"strings"
 	"testing"
 
-	"google.golang.org/api/option"
 	"google.golang.org/api/sheets/v4"
 )
 
 func TestSheetsTableCreateCmd(t *testing.T) {
-	origNew := newSheetsService
-	t.Cleanup(func() { newSheetsService = origNew })
-
 	var gotReq sheets.BatchUpdateSpreadsheetRequest
 	var gotBody string
 
@@ -72,20 +69,18 @@ func TestSheetsTableCreateCmd(t *testing.T) {
 		}
 	}))
 	defer srv.Close()
-	installSheetsTestService(t, srv)
+	ctx, output := newSheetsTableTestContext(t, srv)
 
-	ctx := newCmdJSONContext(t)
 	cmd := &SheetsTableCreateCmd{}
-	out := captureStdout(t, func() {
-		if err := runKong(t, cmd, []string{
-			"s1",
-			"Sheet1!A1:C4",
-			"--name", "Tasks",
-			"--columns-json", `[{"columnName":"Task"},{"columnName":"Amount","columnType":"DOUBLE"},{"columnName":"Done","columnType":"BOOLEAN"}]`,
-		}, ctx, &RootFlags{Account: "a@b.com"}); err != nil {
-			t.Fatalf("create table: %v", err)
-		}
-	})
+	if err := runKong(t, cmd, []string{
+		"s1",
+		"Sheet1!A1:C4",
+		"--name", "Tasks",
+		"--columns-json", `[{"columnName":"Task"},{"columnName":"Amount","columnType":"DOUBLE"},{"columnName":"Done","columnType":"BOOLEAN"}]`,
+	}, ctx, &RootFlags{Account: "a@b.com"}); err != nil {
+		t.Fatalf("create table: %v", err)
+	}
+	out := output.String()
 
 	if len(gotReq.Requests) != 1 || gotReq.Requests[0].AddTable == nil || gotReq.Requests[0].AddTable.Table == nil {
 		t.Fatalf("expected addTable request, got %#v", gotReq.Requests)
@@ -158,9 +153,6 @@ func TestSheetsTableColumnsJSONValidationIsUsage(t *testing.T) {
 }
 
 func TestSheetsTableListGetDelete(t *testing.T) {
-	origNew := newSheetsService
-	t.Cleanup(func() { newSheetsService = origNew })
-
 	var deletedID string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimPrefix(r.URL.Path, "/sheets/v4")
@@ -208,31 +200,30 @@ func TestSheetsTableListGetDelete(t *testing.T) {
 		}
 	}))
 	defer srv.Close()
-	installSheetsTestService(t, srv)
+	ctx, output := newSheetsTableTestContext(t, srv)
 
-	listOut := captureStdout(t, func() {
-		if err := (&SheetsTableListCmd{SpreadsheetID: "s1"}).Run(newCmdJSONContext(t), &RootFlags{Account: "a@b.com"}); err != nil {
-			t.Fatalf("list tables: %v", err)
-		}
-	})
+	if err := (&SheetsTableListCmd{SpreadsheetID: "s1"}).Run(ctx, &RootFlags{Account: "a@b.com"}); err != nil {
+		t.Fatalf("list tables: %v", err)
+	}
+	listOut := output.String()
 	if !strings.Contains(listOut, `"a1": "Sheet1!A1:C4"`) {
 		t.Fatalf("missing A1 output: %s", listOut)
 	}
 
-	getOut := captureStdout(t, func() {
-		if err := (&SheetsTableGetCmd{SpreadsheetID: "s1", TableID: "Tasks"}).Run(newCmdJSONContext(t), &RootFlags{Account: "a@b.com"}); err != nil {
-			t.Fatalf("get table: %v", err)
-		}
-	})
+	output.Reset()
+	if err := (&SheetsTableGetCmd{SpreadsheetID: "s1", TableID: "Tasks"}).Run(ctx, &RootFlags{Account: "a@b.com"}); err != nil {
+		t.Fatalf("get table: %v", err)
+	}
+	getOut := output.String()
 	if !strings.Contains(getOut, `"tableId": "tbl1"`) {
 		t.Fatalf("missing table output: %s", getOut)
 	}
 
-	deleteOut := captureStdout(t, func() {
-		if err := (&SheetsTableDeleteCmd{SpreadsheetID: "s1", TableID: "tbl1", DiscardData: true}).Run(newCmdJSONContext(t), &RootFlags{Account: "a@b.com", Force: true}); err != nil {
-			t.Fatalf("delete table: %v", err)
-		}
-	})
+	output.Reset()
+	if err := (&SheetsTableDeleteCmd{SpreadsheetID: "s1", TableID: "tbl1", DiscardData: true}).Run(ctx, &RootFlags{Account: "a@b.com", Force: true}); err != nil {
+		t.Fatalf("delete table: %v", err)
+	}
+	deleteOut := output.String()
 	if deletedID != "tbl1" {
 		t.Fatalf("deleted table id = %q", deletedID)
 	}
@@ -258,15 +249,16 @@ func TestSheetsTableDeleteRequiresDiscardData(t *testing.T) {
 }
 
 func TestSheetsTableDeleteDryRunDisclosesDataDeletion(t *testing.T) {
-	out := captureStdout(t, func() {
-		err := (&SheetsTableDeleteCmd{
-			SpreadsheetID: "s1",
-			TableID:       "tbl1",
-		}).Run(newCmdJSONContext(t), &RootFlags{DryRun: true})
-		if ExitCode(err) != 0 {
-			t.Fatalf("expected dry-run exit, got %v", err)
-		}
-	})
+	output := &bytes.Buffer{}
+	ctx := newCmdRuntimeJSONOutputContext(t, output, io.Discard)
+	err := (&SheetsTableDeleteCmd{
+		SpreadsheetID: "s1",
+		TableID:       "tbl1",
+	}).Run(ctx, &RootFlags{DryRun: true})
+	if ExitCode(err) != 0 {
+		t.Fatalf("expected dry-run exit, got %v", err)
+	}
+	out := output.String()
 
 	var payload struct {
 		Op      string         `json:"op"`
@@ -284,9 +276,6 @@ func TestSheetsTableDeleteDryRunDisclosesDataDeletion(t *testing.T) {
 }
 
 func TestSheetsTableAppendCmd(t *testing.T) {
-	origNew := newSheetsService
-	t.Cleanup(func() { newSheetsService = origNew })
-
 	var gotRange string
 	var gotInsert string
 	var gotInput string
@@ -345,18 +334,17 @@ func TestSheetsTableAppendCmd(t *testing.T) {
 		}
 	}))
 	defer srv.Close()
-	installSheetsTestService(t, srv)
+	ctx, output := newSheetsTableTestContext(t, srv)
 
-	out := captureStdout(t, func() {
-		cmd := &SheetsTableAppendCmd{}
-		if err := runKong(t, cmd, []string{
-			"s1",
-			"Tasks",
-			"--values-json", `[["Write docs",2,true]]`,
-		}, newCmdJSONContext(t), &RootFlags{Account: "a@b.com"}); err != nil {
-			t.Fatalf("append table: %v", err)
-		}
-	})
+	cmd := &SheetsTableAppendCmd{}
+	if err := runKong(t, cmd, []string{
+		"s1",
+		"Tasks",
+		"--values-json", `[["Write docs",2,true]]`,
+	}, ctx, &RootFlags{Account: "a@b.com"}); err != nil {
+		t.Fatalf("append table: %v", err)
+	}
+	out := output.String()
 
 	if gotRange != "Sheet1!A1:C4" {
 		t.Fatalf("append range = %q", gotRange)
@@ -428,9 +416,6 @@ func TestSheetsTableAppendValueValidationIsUsage(t *testing.T) {
 }
 
 func TestSheetsTableClearCmdClearsDataRowsOnly(t *testing.T) {
-	origNew := newSheetsService
-	t.Cleanup(func() { newSheetsService = origNew })
-
 	var gotClearRange string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimPrefix(r.URL.Path, "/sheets/v4")
@@ -473,9 +458,9 @@ func TestSheetsTableClearCmdClearsDataRowsOnly(t *testing.T) {
 		}
 	}))
 	defer srv.Close()
-	installSheetsTestService(t, srv)
+	ctx, output := newSheetsTableTestContext(t, srv)
 
-	if err := (&SheetsTableClearCmd{SpreadsheetID: "s1", TableID: "tbl1"}).Run(newCmdJSONContext(t), &RootFlags{Account: "a@b.com"}); err == nil {
+	if err := (&SheetsTableClearCmd{SpreadsheetID: "s1", TableID: "tbl1"}).Run(ctx, &RootFlags{Account: "a@b.com"}); err == nil {
 		t.Fatal("expected --force error")
 	} else if !strings.Contains(err.Error(), "requires --force") {
 		t.Fatalf("error = %q", err.Error())
@@ -484,12 +469,12 @@ func TestSheetsTableClearCmdClearsDataRowsOnly(t *testing.T) {
 		t.Fatalf("clear ran without --force: %q", gotClearRange)
 	}
 
-	out := captureStdout(t, func() {
-		cmd := &SheetsTableClearCmd{}
-		if err := runKong(t, cmd, []string{"s1", "tbl1"}, newCmdJSONContext(t), &RootFlags{Account: "a@b.com", Force: true}); err != nil {
-			t.Fatalf("clear table: %v", err)
-		}
-	})
+	output.Reset()
+	cmd := &SheetsTableClearCmd{}
+	if err := runKong(t, cmd, []string{"s1", "tbl1"}, ctx, &RootFlags{Account: "a@b.com", Force: true}); err != nil {
+		t.Fatalf("clear table: %v", err)
+	}
+	out := output.String()
 
 	if gotClearRange != "Sheet1!A2:C4" {
 		t.Fatalf("clear range = %q", gotClearRange)
@@ -538,16 +523,10 @@ func TestSheetsTableDataRangeRejectsHeaderOnly(t *testing.T) {
 	}
 }
 
-func installSheetsTestService(t *testing.T, srv *httptest.Server) {
+func newSheetsTableTestContext(t *testing.T, srv *httptest.Server) (context.Context, *bytes.Buffer) {
 	t.Helper()
-
-	svc, err := sheets.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
-	newSheetsService = func(context.Context, string) (*sheets.Service, error) { return svc, nil }
+	svc := newSheetsServiceFromServer(t, srv)
+	output := &bytes.Buffer{}
+	ctx := withSheetsTestService(newCmdRuntimeJSONOutputContext(t, output, io.Discard), svc)
+	return ctx, output
 }

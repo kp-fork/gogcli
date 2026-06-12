@@ -10,10 +10,6 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
-
-	"google.golang.org/api/sheets/v4"
-
-	"github.com/steipete/gogcli/internal/ui"
 )
 
 type sheetsRawHit struct {
@@ -44,10 +40,10 @@ func newSheetsRawTestServer(t *testing.T, status int, body map[string]any, hit *
 	}))
 }
 
-func installMockSheetsService(t *testing.T, srv *httptest.Server) {
+func newSheetsRawTestContext(t *testing.T, srv *httptest.Server, stdout, stderr io.Writer) context.Context {
 	t.Helper()
-	svc := newGoogleTestServiceWithEndpoint(t, srv.Client(), srv.URL+"/", sheets.NewService)
-	stubGoogleTestService(t, &newSheetsService, svc)
+	svc := newSheetsServiceFromServer(t, srv)
+	return withSheetsTestService(newCmdRuntimeOutputContext(t, stdout, stderr), svc)
 }
 
 func fullSheetResponse(id string) map[string]any {
@@ -74,29 +70,19 @@ func fullSheetResponse(id string) map[string]any {
 	}
 }
 
-func rawContextWithStderr(t *testing.T, stderr io.Writer) context.Context {
-	t.Helper()
-	u, err := ui.New(ui.Options{Stdout: io.Discard, Stderr: stderr, Color: "never"})
-	if err != nil {
-		t.Fatalf("ui.New: %v", err)
-	}
-	return ui.WithUI(context.Background(), u)
-}
-
 func TestSheetsRaw_HappyPath_NoGridDataByDefault(t *testing.T) {
 	hit := &sheetsRawHit{}
 	srv := newSheetsRawTestServer(t, 0, fullSheetResponse("s1"), hit)
 	defer srv.Close()
-	installMockSheetsService(t, srv)
 
-	ctx := rawTestContext(t)
+	var output bytes.Buffer
+	ctx := newSheetsRawTestContext(t, srv, &output, io.Discard)
 	flags := &RootFlags{Account: "a@b.com"}
 
-	out := captureStdout(t, func() {
-		if err := runKong(t, &SheetsRawCmd{}, []string{"s1"}, ctx, flags); err != nil {
-			t.Fatalf("run: %v", err)
-		}
-	})
+	if err := runKong(t, &SheetsRawCmd{}, []string{"s1"}, ctx, flags); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	out := output.String()
 
 	if hit.includeGridData.Load() {
 		t.Fatalf("--include-grid-data should not be set by default")
@@ -118,17 +104,14 @@ func TestSheetsRaw_IncludeGridDataFlag(t *testing.T) {
 	hit := &sheetsRawHit{}
 	srv := newSheetsRawTestServer(t, 0, fullSheetResponse("s1"), hit)
 	defer srv.Close()
-	installMockSheetsService(t, srv)
 
 	var stderr bytes.Buffer
-	ctx := rawContextWithStderr(t, &stderr)
+	ctx := newSheetsRawTestContext(t, srv, io.Discard, &stderr)
 	flags := &RootFlags{Account: "a@b.com"}
 
-	_ = captureStdout(t, func() {
-		if err := runKong(t, &SheetsRawCmd{}, []string{"s1", "--include-grid-data"}, ctx, flags); err != nil {
-			t.Fatalf("run: %v", err)
-		}
-	})
+	if err := runKong(t, &SheetsRawCmd{}, []string{"s1", "--include-grid-data"}, ctx, flags); err != nil {
+		t.Fatalf("run: %v", err)
+	}
 
 	if !hit.includeGridData.Load() {
 		t.Fatalf("expected includeGridData=true in request")
@@ -142,35 +125,29 @@ func TestSheetsRaw_IncludeGridDataFlag(t *testing.T) {
 func TestSheetsRaw_APIError(t *testing.T) {
 	srv := newSheetsRawTestServer(t, http.StatusInternalServerError, nil, nil)
 	defer srv.Close()
-	installMockSheetsService(t, srv)
 
-	ctx := rawTestContext(t)
+	ctx := newSheetsRawTestContext(t, srv, io.Discard, io.Discard)
 	flags := &RootFlags{Account: "a@b.com"}
-	_ = captureStdout(t, func() {
-		err := runKong(t, &SheetsRawCmd{}, []string{"s1"}, ctx, flags)
-		if err == nil {
-			t.Fatalf("expected error on 500")
-		}
-	})
+	err := runKong(t, &SheetsRawCmd{}, []string{"s1"}, ctx, flags)
+	if err == nil {
+		t.Fatalf("expected error on 500")
+	}
 }
 
 func TestSheetsRaw_NotFound(t *testing.T) {
 	srv := newSheetsRawTestServer(t, http.StatusNotFound, nil, nil)
 	defer srv.Close()
-	installMockSheetsService(t, srv)
 
-	ctx := rawTestContext(t)
+	ctx := newSheetsRawTestContext(t, srv, io.Discard, io.Discard)
 	flags := &RootFlags{Account: "a@b.com"}
-	_ = captureStdout(t, func() {
-		err := runKong(t, &SheetsRawCmd{}, []string{"s1"}, ctx, flags)
-		if err == nil {
-			t.Fatalf("expected error on 404")
-		}
-	})
+	err := runKong(t, &SheetsRawCmd{}, []string{"s1"}, ctx, flags)
+	if err == nil {
+		t.Fatalf("expected error on 404")
+	}
 }
 
 func TestSheetsRaw_EmptyID(t *testing.T) {
-	ctx := rawTestContext(t)
+	ctx := newCmdRuntimeOutputContext(t, io.Discard, io.Discard)
 	flags := &RootFlags{Account: "a@b.com"}
 	if err := (&SheetsRawCmd{}).Run(ctx, flags); err == nil {
 		t.Fatalf("expected error on empty id")

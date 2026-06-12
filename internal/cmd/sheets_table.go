@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 
@@ -55,7 +54,7 @@ func (c *SheetsTableListCmd) Run(ctx context.Context, flags *RootFlags) error {
 	})
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"tables": tables})
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{"tables": tables})
 	}
 
 	if len(tables) == 0 {
@@ -118,7 +117,7 @@ func (c *SheetsTableGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"table": table})
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{"table": table})
 	}
 
 	u.Out().Linef("name\t%s", table.Name)
@@ -211,7 +210,7 @@ func (c *SheetsTableCreateCmd) Run(ctx context.Context, flags *RootFlags) error 
 	item := sheetsTableToItem(created, catalog)
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"table": item})
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{"table": item})
 	}
 
 	u.Out().Linef("created\t%s", item.TableID)
@@ -287,7 +286,7 @@ func (c *SheetsTableDeleteCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{
 			"deleted": map[string]any{
 				"tableId": table.TableID,
 				"name":    table.Name,
