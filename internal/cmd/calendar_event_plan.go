@@ -68,6 +68,21 @@ type calendarUpdateFields struct {
 	WorkingCustomLabel    bool
 }
 
+type calendarUpdatePlan struct {
+	CalendarID         string
+	EventID            string
+	Scope              string
+	OriginalStartTime  string
+	SendUpdates        string
+	AddAttendee        string
+	WantsAddAttendee   bool
+	RecurrenceProvided bool
+	Fields             calendarUpdateFields
+	PlaceLookup        *calendarPlaceLookupRequest
+	Patch              *calendar.Event
+	Changed            bool
+}
+
 func (f calendarUpdateFields) focusEventType() bool {
 	return f.FocusAutoDecline || f.FocusDeclineMessage || f.FocusChatStatus
 }
@@ -87,6 +102,100 @@ func (f calendarUpdateFields) workingLocationEventType() bool {
 
 func (f calendarUpdateFields) zoomMutation() bool {
 	return f.WithZoom || f.RegenerateZoom || f.RemoveZoom
+}
+
+func buildCalendarUpdatePlan(c *CalendarUpdateCmd, fields calendarUpdateFields) (*calendarUpdatePlan, error) {
+	calendarID, err := prepareCalendarID(c.CalendarID, false)
+	if err != nil {
+		return nil, err
+	}
+	eventID := normalizeCalendarEventID(c.EventID)
+	if eventID == "" {
+		return nil, usage("empty eventId")
+	}
+
+	scope, err := resolveRecurringScope(c.Scope, c.OriginalStartTime)
+	if err != nil {
+		return nil, err
+	}
+	if fields.AllDay && (!fields.From || !fields.To) {
+		return nil, usage("when changing --all-day, also provide --from and --to")
+	}
+	if fields.Attendees && fields.AddAttendee {
+		return nil, usage("cannot use both --attendees and --add-attendee; use --attendees to replace all, or --add-attendee to add")
+	}
+	if fields.WithMeet && fields.RegenerateMeet {
+		return nil, usage("use only one of --with-meet or --regenerate-meet")
+	}
+	if mutexErr := validateZoomConferenceFlagMutex(fields); mutexErr != nil {
+		return nil, mutexErr
+	}
+
+	placeLookup, err := validateCalendarPlaceLookup(calendarPlaceLookup{
+		LocationSet:       fields.Location,
+		LocationSearch:    c.LocationSearch,
+		LocationSearchSet: fields.LocationSearch,
+		PlaceID:           c.PlaceID,
+		PlaceIDSet:        fields.PlaceID,
+		LanguageCode:      c.PlaceLanguage,
+		RegionCode:        c.PlaceRegion,
+	})
+	if err != nil {
+		return nil, err
+	}
+	sendUpdates, err := validateSendUpdates(c.SendUpdates)
+	if err != nil {
+		return nil, err
+	}
+	patch, changed, err := c.buildUpdatePatch(fields)
+	if err != nil {
+		return nil, err
+	}
+
+	addAttendee := strings.TrimSpace(c.AddAttendee)
+	if fields.AddAttendee && addAttendee == "" {
+		return nil, usage("empty --add-attendee")
+	}
+	if !changed && !fields.AddAttendee && placeLookup == nil {
+		return nil, usage("no updates provided")
+	}
+
+	return &calendarUpdatePlan{
+		CalendarID:         calendarID,
+		EventID:            eventID,
+		Scope:              scope,
+		OriginalStartTime:  strings.TrimSpace(c.OriginalStartTime),
+		SendUpdates:        sendUpdates,
+		AddAttendee:        addAttendee,
+		WantsAddAttendee:   fields.AddAttendee,
+		RecurrenceProvided: fields.Recurrence,
+		Fields:             fields,
+		PlaceLookup:        placeLookup,
+		Patch:              patch,
+		Changed:            changed,
+	}, nil
+}
+
+func (p *calendarUpdatePlan) dryRunRequest() map[string]any {
+	request := map[string]any{
+		"calendar_id":          p.CalendarID,
+		"event_id":             p.EventID,
+		"send_updates":         p.SendUpdates,
+		"scope":                p.Scope,
+		"original_start_time":  p.OriginalStartTime,
+		"add_attendee":         p.AddAttendee,
+		"patch":                p.Patch,
+		"wants_add_attendee":   p.WantsAddAttendee,
+		"conference_version_1": patchHasConferenceDataMutation(p.Patch),
+		"supports_attachments": patchHasAttachmentsMutation(p.Patch),
+	}
+	if p.PlaceLookup != nil {
+		request["place_lookup"] = p.PlaceLookup.dryRunPayload()
+	}
+	if zoomPayload := zoomUpdateDryRunPayload(p.Fields); zoomPayload != nil {
+		request["zoom"] = zoomPayload
+	}
+	return request
 }
 
 func buildCalendarCreatePlan(c *CalendarCreateCmd) (*calendarCreatePlan, error) {

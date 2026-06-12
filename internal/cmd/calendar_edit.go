@@ -375,113 +375,41 @@ func calendarUpdateFieldsFromKong(kctx *kong.Context) calendarUpdateFields {
 	}
 }
 
-//nolint:gocyclo,cyclop // Calendar update already handles many flag families; Zoom adds one narrow branch.
 func (c *CalendarUpdateCmd) Run(ctx context.Context, kctx *kong.Context, flags *RootFlags) error {
 	ctx = withZoomIncludePasswords(ctx, c.IncludePasswords)
 	fields := calendarUpdateFieldsFromKong(kctx)
-	calendarID, err := prepareCalendarID(c.CalendarID, false)
+	plan, err := buildCalendarUpdatePlan(c, fields)
 	if err != nil {
 		return err
 	}
-	eventID := normalizeCalendarEventID(c.EventID)
-	if eventID == "" {
-		return usage("empty eventId")
-	}
-
-	scope, err := resolveRecurringScope(c.Scope, c.OriginalStartTime)
-	if err != nil {
-		return err
-	}
-
-	// If --all-day changed, require from/to to update both date/time fields.
-	if fields.AllDay {
-		if !fields.From || !fields.To {
-			return usage("when changing --all-day, also provide --from and --to")
-		}
-	}
-
-	// Cannot use both --attendees and --add-attendee at the same time.
-	if fields.Attendees && fields.AddAttendee {
-		return usage("cannot use both --attendees and --add-attendee; use --attendees to replace all, or --add-attendee to add")
-	}
-	if fields.WithMeet && fields.RegenerateMeet {
-		return usage("use only one of --with-meet or --regenerate-meet")
-	}
-	if mutexErr := validateZoomConferenceFlagMutex(fields); mutexErr != nil {
-		return mutexErr
-	}
-	placeLookup, err := validateCalendarPlaceLookup(calendarPlaceLookup{
-		LocationSet:       fields.Location,
-		LocationSearch:    c.LocationSearch,
-		LocationSearchSet: fields.LocationSearch,
-		PlaceID:           c.PlaceID,
-		PlaceIDSet:        fields.PlaceID,
-		LanguageCode:      c.PlaceLanguage,
-		RegionCode:        c.PlaceRegion,
-	})
-	if err != nil {
-		return err
-	}
-	if !(flags != nil && flags.DryRun) {
-		if placeErr := c.resolvePlace(ctx, kctx); placeErr != nil {
-			return placeErr
-		}
-	}
-
-	sendUpdates, err := validateSendUpdates(c.SendUpdates)
-	if err != nil {
-		return err
-	}
-	recurrenceProvided := fields.Recurrence
-
-	patch, changed, err := c.buildUpdatePatch(fields)
-	if err != nil {
-		return err
-	}
-
-	wantsAddAttendee := fields.AddAttendee
-	if wantsAddAttendee && strings.TrimSpace(c.AddAttendee) == "" {
-		return usage("empty --add-attendee")
-	}
-
-	if !changed && !wantsAddAttendee && placeLookup == nil {
-		return usage("no updates provided")
-	}
-
-	request := map[string]any{
-		"calendar_id":          calendarID,
-		"event_id":             eventID,
-		"send_updates":         sendUpdates,
-		"scope":                scope,
-		"original_start_time":  strings.TrimSpace(c.OriginalStartTime),
-		"add_attendee":         strings.TrimSpace(c.AddAttendee),
-		"patch":                patch,
-		"wants_add_attendee":   wantsAddAttendee,
-		"conference_version_1": patchHasConferenceDataMutation(patch),
-		"supports_attachments": patchHasAttachmentsMutation(patch),
-	}
-	if placeLookup != nil {
-		request["place_lookup"] = placeLookup.dryRunPayload()
-	}
-	if zoomPayload := zoomUpdateDryRunPayload(fields); zoomPayload != nil {
-		request["zoom"] = zoomPayload
-	}
-	if dryRunErr := dryRunExit(ctx, flags, "calendar.update", request); dryRunErr != nil {
+	if dryRunErr := dryRunExit(ctx, flags, "calendar.update", plan.dryRunRequest()); dryRunErr != nil {
 		return dryRunErr
 	}
+	if plan.PlaceLookup != nil {
+		if placeErr := c.resolvePlace(ctx, fields); placeErr != nil {
+			return placeErr
+		}
+		plan, err = buildCalendarUpdatePlan(c, fields)
+		if err != nil {
+			return err
+		}
+	}
 
-	mutation, err := newCalendarMutationContext(ctx, flags, calendarID)
+	mutation, err := newCalendarMutationContext(ctx, flags, plan.CalendarID)
 	if err != nil {
 		return err
 	}
 
+	patch := plan.Patch
+	changed := plan.Changed
+
 	// For --add-attendee, fetch current event to preserve existing attendees with metadata.
-	if wantsAddAttendee {
-		existing, getErr := mutation.svc.Events.Get(mutation.calendarID, eventID).Context(ctx).Do()
+	if plan.WantsAddAttendee {
+		existing, getErr := mutation.svc.Events.Get(mutation.calendarID, plan.EventID).Context(ctx).Do()
 		if getErr != nil {
 			return fmt.Errorf("failed to fetch current event: %w", getErr)
 		}
-		merged, attendeesChanged := mergeAttendeesWithChange(existing.Attendees, c.AddAttendee)
+		merged, attendeesChanged := mergeAttendeesWithChange(existing.Attendees, plan.AddAttendee)
 		if attendeesChanged {
 			patch.Attendees = merged
 			changed = true
@@ -493,7 +421,7 @@ func (c *CalendarUpdateCmd) Run(ctx context.Context, kctx *kong.Context, flags *
 
 	if fields.zoomMutation() {
 		var zoomErr error
-		patch, _, zoomErr = c.prepareZoomConferencePatch(ctx, mutation, eventID, scope, c.OriginalStartTime, patch, changed, fields)
+		patch, _, zoomErr = c.prepareZoomConferencePatch(ctx, mutation, plan.EventID, plan.Scope, plan.OriginalStartTime, patch, changed, fields)
 		if errors.Is(zoomErr, errZoomConferenceAlreadyHandled) {
 			return nil
 		}
@@ -503,7 +431,7 @@ func (c *CalendarUpdateCmd) Run(ctx context.Context, kctx *kong.Context, flags *
 	}
 
 	if patch.ConferenceData != nil && !fields.RegenerateMeet && !fields.zoomMutation() && patchOnlyConferenceData(patch) {
-		resolution, resolveErr := resolveRecurringScopeResolution(ctx, mutation.svc, mutation.calendarID, eventID, scope, c.OriginalStartTime)
+		resolution, resolveErr := resolveRecurringScopeResolution(ctx, mutation.svc, mutation.calendarID, plan.EventID, plan.Scope, plan.OriginalStartTime)
 		if resolveErr != nil {
 			return resolveErr
 		}
@@ -516,7 +444,7 @@ func (c *CalendarUpdateCmd) Run(ctx context.Context, kctx *kong.Context, flags *
 		}
 	}
 
-	targetEventID, parentRecurrence, err := applyUpdateScope(ctx, mutation.svc, mutation.calendarID, eventID, scope, c.OriginalStartTime, patch)
+	targetEventID, parentRecurrence, err := applyUpdateScope(ctx, mutation.svc, mutation.calendarID, plan.EventID, plan.Scope, plan.OriginalStartTime, patch)
 	if err != nil {
 		return err
 	}
@@ -533,21 +461,21 @@ func (c *CalendarUpdateCmd) Run(ctx context.Context, kctx *kong.Context, flags *
 			}
 		}
 	}
-	if recurrenceProvided {
+	if plan.RecurrenceProvided {
 		if enrichErr := ensureRecurringPatchDateTimes(ctx, mutation.svc, mutation.calendarID, targetEventID, patch); enrichErr != nil {
 			return enrichErr
 		}
 	}
 
-	updated, err := mutation.patchEvent(ctx, targetEventID, patch, sendUpdates)
+	updated, err := mutation.patchEvent(ctx, targetEventID, patch, plan.SendUpdates)
 	if err != nil {
 		if c.createdZoomMeetingID != "" {
 			_ = cancelZoomMeeting(ctx, c.createdZoomMeetingID, "delete")
 		}
 		return err
 	}
-	if scope == scopeFuture {
-		if err := truncateParentRecurrence(ctx, mutation.svc, mutation.calendarID, eventID, parentRecurrence, c.OriginalStartTime, sendUpdates); err != nil {
+	if plan.Scope == scopeFuture {
+		if err := truncateParentRecurrence(ctx, mutation.svc, mutation.calendarID, plan.EventID, parentRecurrence, plan.OriginalStartTime, plan.SendUpdates); err != nil {
 			return err
 		}
 	}

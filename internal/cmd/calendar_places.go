@@ -42,13 +42,13 @@ func (c *CalendarCreateCmd) resolvePlace(ctx context.Context, kctx *kong.Context
 	return nil
 }
 
-func (c *CalendarUpdateCmd) resolvePlace(ctx context.Context, kctx *kong.Context) error {
+func (c *CalendarUpdateCmd) resolvePlace(ctx context.Context, fields calendarUpdateFields) error {
 	place, err := resolveCalendarPlace(ctx, calendarPlaceLookup{
-		LocationSet:       flagProvided(kctx, "location"),
+		LocationSet:       fields.Location,
 		LocationSearch:    c.LocationSearch,
-		LocationSearchSet: flagProvided(kctx, "location-search"),
+		LocationSearchSet: fields.LocationSearch,
 		PlaceID:           c.PlaceID,
-		PlaceIDSet:        flagProvided(kctx, "place-id"),
+		PlaceIDSet:        fields.PlaceID,
 		LanguageCode:      c.PlaceLanguage,
 		RegionCode:        c.PlaceRegion,
 	})
