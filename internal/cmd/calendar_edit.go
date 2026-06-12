@@ -63,73 +63,85 @@ type CalendarCreateCmd struct {
 	resolvedPlace         *calendarPlace
 }
 
+func calendarCreateFieldsFromKong(kctx *kong.Context) calendarCreateFields {
+	return calendarCreateFields{
+		Location:       flagProvided(kctx, "location"),
+		LocationSearch: flagProvided(kctx, "location-search"),
+		PlaceID:        flagProvided(kctx, "place-id"),
+		WithMeet:       flagProvided(kctx, "with-meet"),
+		WithZoom:       flagProvided(kctx, "with-zoom"),
+	}
+}
+
+func calendarCreateInputFromCommand(c *CalendarCreateCmd) calendarCreateInput {
+	return calendarCreateInput{
+		CalendarID:            c.CalendarID,
+		Summary:               c.Summary,
+		From:                  c.From,
+		To:                    c.To,
+		StartTimezone:         c.StartTimezone,
+		EndTimezone:           c.EndTimezone,
+		Description:           c.Description,
+		Location:              c.Location,
+		Attendees:             c.Attendees,
+		AllDay:                c.AllDay,
+		Recurrence:            c.Recurrence,
+		Reminders:             c.Reminders,
+		ColorID:               c.ColorId,
+		Visibility:            c.Visibility,
+		Transparency:          c.Transparency,
+		SendUpdates:           c.SendUpdates,
+		GuestsCanInviteOthers: c.GuestsCanInviteOthers,
+		GuestsCanModify:       c.GuestsCanModify,
+		GuestsCanSeeOthers:    c.GuestsCanSeeOthers,
+		WithMeet:              c.WithMeet,
+		WithZoom:              c.WithZoom,
+		SourceURL:             c.SourceUrl,
+		SourceTitle:           c.SourceTitle,
+		Attachments:           c.Attachments,
+		PrivateProps:          c.PrivateProps,
+		SharedProps:           c.SharedProps,
+		EventType:             c.EventType,
+		FocusAutoDecline:      c.FocusAutoDecline,
+		FocusDeclineMessage:   c.FocusDeclineMessage,
+		FocusChatStatus:       c.FocusChatStatus,
+		OOOAutoDecline:        c.OOOAutoDecline,
+		OOODeclineMessage:     c.OOODeclineMessage,
+		WorkingLocationType:   c.WorkingLocationType,
+		WorkingOfficeLabel:    c.WorkingOfficeLabel,
+		WorkingBuildingID:     c.WorkingBuildingId,
+		WorkingFloorID:        c.WorkingFloorId,
+		WorkingDeskID:         c.WorkingDeskId,
+		WorkingCustomLabel:    c.WorkingCustomLabel,
+		LocationSearch:        c.LocationSearch,
+		PlaceID:               c.PlaceID,
+		PlaceLanguage:         c.PlaceLanguage,
+		PlaceRegion:           c.PlaceRegion,
+		ResolvedPlace:         c.resolvedPlace,
+	}
+}
+
 func (c *CalendarCreateCmd) Run(ctx context.Context, flags *RootFlags, kctx *kong.Context) error {
 	ctx = withZoomIncludePasswords(ctx, c.IncludePasswords)
-	if kctx != nil && flagProvided(kctx, "with-meet") && flagProvided(kctx, "with-zoom") {
-		return usage("use only one of --with-zoom or --with-meet")
-	}
-	if flags != nil && flags.DryRun {
-		placeLookup, err := validateCalendarPlaceLookup(calendarPlaceLookup{
-			LocationSet:       flagProvided(kctx, "location") || strings.TrimSpace(c.Location) != "",
-			LocationSearch:    c.LocationSearch,
-			LocationSearchSet: flagProvided(kctx, "location-search"),
-			PlaceID:           c.PlaceID,
-			PlaceIDSet:        flagProvided(kctx, "place-id"),
-			LanguageCode:      c.PlaceLanguage,
-			RegionCode:        c.PlaceRegion,
-		})
-		if err != nil {
-			return err
-		}
-		plan, err := buildCalendarCreatePlan(c)
-		if err != nil {
-			return err
-		}
-		calendarID, err := prepareCalendarID(plan.CalendarID, false)
-		if err != nil {
-			return err
-		}
-		request := map[string]any{
-			"calendar_id":          calendarID,
-			"send_updates":         plan.SendUpdates,
-			"conference_version_1": plan.WithMeet,
-			"supports_attachments": len(plan.Event.Attachments) > 0,
-			"event":                plan.Event,
-		}
-		if plan.WithZoom {
-			request["zoom"] = zoomDryRunPayload("create")
-		}
-		if placeLookup != nil {
-			request["place_lookup"] = placeLookup.dryRunPayload()
-		}
-		return dryRunExit(ctx, flags, "calendar.create", request)
-	}
-
-	if err := c.resolvePlace(ctx, kctx); err != nil {
-		return err
-	}
-
-	plan, err := buildCalendarCreatePlan(c)
+	fields := calendarCreateFieldsFromKong(kctx)
+	plan, err := buildCalendarCreatePlan(calendarCreateInputFromCommand(c), fields)
 	if err != nil {
 		return err
 	}
-
-	calendarID, err := prepareCalendarID(plan.CalendarID, false)
-	if err != nil {
-		return err
-	}
-
-	if dryRunErr := dryRunExit(ctx, flags, "calendar.create", map[string]any{
-		"calendar_id":          calendarID,
-		"send_updates":         plan.SendUpdates,
-		"conference_version_1": plan.WithMeet || plan.WithZoom,
-		"supports_attachments": len(plan.Event.Attachments) > 0,
-		"event":                plan.Event,
-	}); dryRunErr != nil {
+	if dryRunErr := dryRunExit(ctx, flags, "calendar.create", plan.dryRunRequest()); dryRunErr != nil {
 		return dryRunErr
 	}
+	if plan.PlaceLookup != nil {
+		if placeErr := c.resolvePlace(ctx, fields); placeErr != nil {
+			return placeErr
+		}
+		plan, err = buildCalendarCreatePlan(calendarCreateInputFromCommand(c), fields)
+		if err != nil {
+			return err
+		}
+	}
 
-	mutation, err := newCalendarMutationContext(ctx, flags, calendarID)
+	mutation, err := newCalendarMutationContext(ctx, flags, plan.CalendarID)
 	if err != nil {
 		return err
 	}
@@ -155,127 +167,6 @@ func (c *CalendarCreateCmd) Run(ctx context.Context, flags *RootFlags, kctx *kon
 		return err
 	}
 	return mutation.writeEvent(ctx, created)
-}
-
-func (c *CalendarCreateCmd) resolveCreateEventType() (string, error) {
-	focusFlags := strings.TrimSpace(c.FocusAutoDecline) != "" ||
-		strings.TrimSpace(c.FocusDeclineMessage) != "" ||
-		strings.TrimSpace(c.FocusChatStatus) != ""
-	oooFlags := strings.TrimSpace(c.OOOAutoDecline) != "" ||
-		strings.TrimSpace(c.OOODeclineMessage) != ""
-	workingFlags := strings.TrimSpace(c.WorkingLocationType) != "" ||
-		strings.TrimSpace(c.WorkingOfficeLabel) != "" ||
-		strings.TrimSpace(c.WorkingBuildingId) != "" ||
-		strings.TrimSpace(c.WorkingFloorId) != "" ||
-		strings.TrimSpace(c.WorkingDeskId) != "" ||
-		strings.TrimSpace(c.WorkingCustomLabel) != ""
-
-	return resolveEventType(c.EventType, focusFlags, oooFlags, workingFlags)
-}
-
-func (c *CalendarCreateCmd) defaultSummaryForEventType(eventType string) string {
-	switch eventType {
-	case eventTypeFocusTime:
-		return defaultFocusSummary
-	case eventTypeOutOfOffice:
-		return defaultOOOSummary
-	case eventTypeWorkingLocation:
-		return workingLocationSummary(workingLocationInput{
-			Type:        c.WorkingLocationType,
-			OfficeLabel: c.WorkingOfficeLabel,
-			CustomLabel: c.WorkingCustomLabel,
-		})
-	default:
-		return ""
-	}
-}
-
-func resolveCreateAllDay(from, to string, allDay bool, eventType string) (bool, error) {
-	if eventType == eventTypeOutOfOffice {
-		if allDay {
-			return false, usage("out-of-office events cannot be all-day; provide RFC3339 datetime --from/--to without --all-day")
-		}
-		if !strings.Contains(from, "T") || !strings.Contains(to, "T") {
-			return false, usage("out-of-office requires RFC3339 datetime --from/--to; date-only out-of-office events are not supported by Google Calendar API")
-		}
-		return false, nil
-	}
-	if eventType != eventTypeWorkingLocation {
-		return allDay, nil
-	}
-	if strings.Contains(from, "T") || strings.Contains(to, "T") {
-		return false, usage("working-location requires date-only --from/--to (YYYY-MM-DD)")
-	}
-	return true, nil
-}
-
-func applyEventTypeTransparencyDefault(transparency, eventType string) string {
-	if transparency == "" && (eventType == eventTypeFocusTime || eventType == eventTypeOutOfOffice) {
-		return transparencyOpaque
-	}
-	if transparency == "" && eventType == eventTypeWorkingLocation {
-		return transparencyTransparent
-	}
-	return transparency
-}
-
-func applyEventTypeVisibilityDefault(visibility, eventType string) string {
-	if visibility == "" && eventType == eventTypeWorkingLocation {
-		return visibilityPublic
-	}
-	return visibility
-}
-
-func (c *CalendarCreateCmd) applyCreateEventType(event *calendar.Event, eventType string) error {
-	switch eventType {
-	case eventTypeDefault:
-		event.EventType = eventTypeDefault
-	case eventTypeFocusTime:
-		props, err := c.buildFocusTimeProperties()
-		if err != nil {
-			return err
-		}
-		event.EventType = eventTypeFocusTime
-		event.FocusTimeProperties = props
-	case eventTypeOutOfOffice:
-		props, err := c.buildOutOfOfficeProperties()
-		if err != nil {
-			return err
-		}
-		event.EventType = eventTypeOutOfOffice
-		event.OutOfOfficeProperties = props
-	case eventTypeWorkingLocation:
-		props, err := buildWorkingLocationProperties(workingLocationInput{
-			Type:        c.WorkingLocationType,
-			OfficeLabel: c.WorkingOfficeLabel,
-			BuildingId:  c.WorkingBuildingId,
-			FloorId:     c.WorkingFloorId,
-			DeskId:      c.WorkingDeskId,
-			CustomLabel: c.WorkingCustomLabel,
-		})
-		if err != nil {
-			return err
-		}
-		event.EventType = eventTypeWorkingLocation
-		event.WorkingLocationProperties = props
-	}
-	return nil
-}
-
-func (c *CalendarCreateCmd) buildFocusTimeProperties() (*calendar.EventFocusTimeProperties, error) {
-	return buildFocusTimeProperties(focusTimeInput{
-		AutoDecline:    c.FocusAutoDecline,
-		DeclineMessage: c.FocusDeclineMessage,
-		ChatStatus:     c.FocusChatStatus,
-	})
-}
-
-func (c *CalendarCreateCmd) buildOutOfOfficeProperties() (*calendar.EventOutOfOfficeProperties, error) {
-	return buildOutOfOfficeProperties(outOfOfficeInput{
-		AutoDecline:            c.OOOAutoDecline,
-		DeclineMessage:         c.OOODeclineMessage,
-		DeclineMessageProvided: false,
-	})
 }
 
 type CalendarUpdateCmd struct {

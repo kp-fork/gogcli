@@ -110,3 +110,53 @@ func TestBuildCalendarUpdatePlanDefersPlaceResolution(t *testing.T) {
 		t.Fatalf("unexpected place dry-run payload: %#v", payload)
 	}
 }
+
+func TestBuildCalendarCreatePlan(t *testing.T) {
+	input := calendarCreateInput{
+		CalendarID:     " primary ",
+		Summary:        " Coffee ",
+		From:           "2026-05-10T10:00:00Z",
+		To:             "2026-05-10T11:00:00Z",
+		LocationSearch: " Cafe ",
+		PlaceLanguage:  "en",
+		WithZoom:       true,
+		SendUpdates:    "all",
+	}
+	fields := calendarCreateFields{
+		LocationSearch: true,
+		WithZoom:       true,
+	}
+
+	plan, err := buildCalendarCreatePlan(input, fields)
+	if err != nil {
+		t.Fatalf("buildCalendarCreatePlan: %v", err)
+	}
+	if plan.CalendarID != "primary" || plan.Event.Summary != "Coffee" {
+		t.Fatalf("unexpected normalized plan: %#v", plan)
+	}
+	if plan.PlaceLookup == nil || plan.PlaceLookup.Query != "Cafe" {
+		t.Fatalf("unexpected place lookup: %#v", plan.PlaceLookup)
+	}
+	request := plan.dryRunRequest()
+	if request["conference_version_1"] != false {
+		t.Fatalf("Zoom must not request Calendar conference data: %#v", request)
+	}
+	zoomPayload, ok := request["zoom"].(map[string]any)
+	if !ok || zoomPayload["action"] != "create" {
+		t.Fatalf("unexpected Zoom payload: %#v", request["zoom"])
+	}
+}
+
+func TestBuildCalendarCreatePlanRejectsConferenceConflict(t *testing.T) {
+	_, err := buildCalendarCreatePlan(calendarCreateInput{
+		CalendarID: "primary",
+		Summary:    "Meeting",
+		From:       "2026-05-10T10:00:00Z",
+		To:         "2026-05-10T11:00:00Z",
+		WithMeet:   true,
+		WithZoom:   true,
+	}, calendarCreateFields{WithMeet: true, WithZoom: true})
+	if err == nil || !strings.Contains(err.Error(), "use only one of --with-zoom or --with-meet") {
+		t.Fatalf("expected conference conflict, got %v", err)
+	}
+}

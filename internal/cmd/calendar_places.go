@@ -6,7 +6,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/alecthomas/kong"
 	"google.golang.org/api/calendar/v3"
 
 	"github.com/steipete/gogcli/internal/config"
@@ -25,13 +24,13 @@ type calendarPlace struct {
 	GoogleMapsURI    string
 }
 
-func (c *CalendarCreateCmd) resolvePlace(ctx context.Context, kctx *kong.Context) error {
+func (c *CalendarCreateCmd) resolvePlace(ctx context.Context, fields calendarCreateFields) error {
 	place, err := resolveCalendarPlace(ctx, calendarPlaceLookup{
-		LocationSet:       flagProvided(kctx, "location") || strings.TrimSpace(c.Location) != "",
+		LocationSet:       fields.Location || strings.TrimSpace(c.Location) != "",
 		LocationSearch:    c.LocationSearch,
-		LocationSearchSet: flagProvided(kctx, "location-search"),
+		LocationSearchSet: fields.LocationSearch,
 		PlaceID:           c.PlaceID,
-		PlaceIDSet:        flagProvided(kctx, "place-id"),
+		PlaceIDSet:        fields.PlaceID,
 		LanguageCode:      c.PlaceLanguage,
 		RegionCode:        c.PlaceRegion,
 	})

@@ -168,7 +168,7 @@ func TestCalendarCreateCmd_RecurringOffsetTimezoneFallback(t *testing.T) {
 }
 
 func TestCalendarCreateCmd_ExplicitTimezones(t *testing.T) {
-	plan, err := buildCalendarCreatePlan(&CalendarCreateCmd{
+	plan, err := buildCalendarCreatePlan(calendarCreateInput{
 		CalendarID:    "primary",
 		Summary:       "Flight",
 		From:          "2026-08-13T13:40:00+02:00",
@@ -178,7 +178,7 @@ func TestCalendarCreateCmd_ExplicitTimezones(t *testing.T) {
 		SendUpdates:   "none",
 		Transparency:  "opaque",
 		Visibility:    "default",
-	})
+	}, calendarCreateFields{})
 	if err != nil {
 		t.Fatalf("buildCalendarCreatePlan: %v", err)
 	}

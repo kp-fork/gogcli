@@ -154,19 +154,19 @@ func TestCalendarUpdateDryRunPlaceIDSkipsPlacesAPI(t *testing.T) {
 }
 
 func TestBuildCalendarCreatePlanAppliesResolvedPlace(t *testing.T) {
-	plan, err := buildCalendarCreatePlan(&CalendarCreateCmd{
+	plan, err := buildCalendarCreatePlan(calendarCreateInput{
 		CalendarID:  "primary",
 		Summary:     "Coffee",
 		From:        "2026-05-10T10:00:00Z",
 		To:          "2026-05-10T11:00:00Z",
 		SendUpdates: "none",
-		resolvedPlace: &calendarPlace{
+		ResolvedPlace: &calendarPlace{
 			ID:               "ChIJ123",
 			Name:             "Cafe",
 			FormattedAddress: "1 Main St",
 			GoogleMapsURI:    "https://maps.example/cafe",
 		},
-	})
+	}, calendarCreateFields{})
 	if err != nil {
 		t.Fatalf("buildCalendarCreatePlan: %v", err)
 	}

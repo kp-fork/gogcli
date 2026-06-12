@@ -18,11 +18,66 @@ type outOfOfficeInput struct {
 	DeclineMessageProvided bool
 }
 
+type calendarCreateFields struct {
+	Location       bool
+	LocationSearch bool
+	PlaceID        bool
+	WithMeet       bool
+	WithZoom       bool
+}
+
+type calendarCreateInput struct {
+	CalendarID            string
+	Summary               string
+	From                  string
+	To                    string
+	StartTimezone         string
+	EndTimezone           string
+	Description           string
+	Location              string
+	Attendees             string
+	AllDay                bool
+	Recurrence            []string
+	Reminders             []string
+	ColorID               string
+	Visibility            string
+	Transparency          string
+	SendUpdates           string
+	GuestsCanInviteOthers *bool
+	GuestsCanModify       *bool
+	GuestsCanSeeOthers    *bool
+	WithMeet              bool
+	WithZoom              bool
+	SourceURL             string
+	SourceTitle           string
+	Attachments           []string
+	PrivateProps          []string
+	SharedProps           []string
+	EventType             string
+	FocusAutoDecline      string
+	FocusDeclineMessage   string
+	FocusChatStatus       string
+	OOOAutoDecline        string
+	OOODeclineMessage     string
+	WorkingLocationType   string
+	WorkingOfficeLabel    string
+	WorkingBuildingID     string
+	WorkingFloorID        string
+	WorkingDeskID         string
+	WorkingCustomLabel    string
+	LocationSearch        string
+	PlaceID               string
+	PlaceLanguage         string
+	PlaceRegion           string
+	ResolvedPlace         *calendarPlace
+}
+
 type calendarCreatePlan struct {
 	CalendarID  string
 	SendUpdates string
 	WithMeet    bool
 	WithZoom    bool
+	PlaceLookup *calendarPlaceLookupRequest
 	Event       *calendar.Event
 }
 
@@ -198,100 +253,250 @@ func (p *calendarUpdatePlan) dryRunRequest() map[string]any {
 	return request
 }
 
-func buildCalendarCreatePlan(c *CalendarCreateCmd) (*calendarCreatePlan, error) {
-	eventType, err := c.resolveCreateEventType()
+func buildCalendarCreatePlan(input calendarCreateInput, fields calendarCreateFields) (*calendarCreatePlan, error) {
+	if fields.WithMeet && fields.WithZoom {
+		return nil, usage("use only one of --with-zoom or --with-meet")
+	}
+	placeLookup, err := validateCalendarPlaceLookup(calendarPlaceLookup{
+		LocationSet:       fields.Location || strings.TrimSpace(input.Location) != "",
+		LocationSearch:    input.LocationSearch,
+		LocationSearchSet: fields.LocationSearch,
+		PlaceID:           input.PlaceID,
+		PlaceIDSet:        fields.PlaceID,
+		LanguageCode:      input.PlaceLanguage,
+		RegionCode:        input.PlaceRegion,
+	})
+	if err != nil {
+		return nil, err
+	}
+	calendarID, err := prepareCalendarID(input.CalendarID, false)
+	if err != nil {
+		return nil, err
+	}
+	eventType, err := resolveCreateEventType(input)
 	if err != nil {
 		return nil, err
 	}
 
-	summary := strings.TrimSpace(c.Summary)
+	summary := strings.TrimSpace(input.Summary)
 	if summary == "" {
-		summary = c.defaultSummaryForEventType(eventType)
+		summary = defaultCreateSummaryForEventType(input, eventType)
 	}
-	if summary == "" || strings.TrimSpace(c.From) == "" || strings.TrimSpace(c.To) == "" {
+	if summary == "" || strings.TrimSpace(input.From) == "" || strings.TrimSpace(input.To) == "" {
 		return nil, usage("required: --summary, --from, --to")
 	}
 
-	colorID, err := validateColorId(c.ColorId)
+	colorID, err := validateColorId(input.ColorID)
 	if err != nil {
 		return nil, err
 	}
-	visibility, err := validateVisibility(c.Visibility)
+	visibility, err := validateVisibility(input.Visibility)
 	if err != nil {
 		return nil, err
 	}
-	transparency, err := validateTransparency(c.Transparency)
+	transparency, err := validateTransparency(input.Transparency)
 	if err != nil {
 		return nil, err
 	}
-	sendUpdates, err := validateSendUpdates(c.SendUpdates)
+	sendUpdates, err := validateSendUpdates(input.SendUpdates)
 	if err != nil {
 		return nil, err
 	}
-	reminders, err := buildReminders(c.Reminders)
+	reminders, err := buildReminders(input.Reminders)
 	if err != nil {
 		return nil, err
 	}
-	allDay, err := resolveCreateAllDay(c.From, c.To, c.AllDay, eventType)
+	allDay, err := resolveCreateAllDay(input.From, input.To, input.AllDay, eventType)
 	if err != nil {
 		return nil, err
 	}
-	start, err := buildEventDateTimeWithTimezone(c.From, allDay, c.StartTimezone, "--start-timezone")
+	start, err := buildEventDateTimeWithTimezone(input.From, allDay, input.StartTimezone, "--start-timezone")
 	if err != nil {
 		return nil, err
 	}
-	end, err := buildEventDateTimeWithTimezone(c.To, allDay, c.EndTimezone, "--end-timezone")
+	end, err := buildEventDateTimeWithTimezone(input.To, allDay, input.EndTimezone, "--end-timezone")
 	if err != nil {
 		return nil, err
 	}
 
 	event := &calendar.Event{
 		Summary:            summary,
-		Description:        strings.TrimSpace(c.Description),
-		Location:           strings.TrimSpace(c.Location),
+		Description:        strings.TrimSpace(input.Description),
+		Location:           strings.TrimSpace(input.Location),
 		Start:              start,
 		End:                end,
-		Attendees:          buildAttendees(c.Attendees),
-		Recurrence:         buildRecurrence(c.Recurrence),
+		Attendees:          buildAttendees(input.Attendees),
+		Recurrence:         buildRecurrence(input.Recurrence),
 		Reminders:          reminders,
 		ColorId:            colorID,
 		Visibility:         applyEventTypeVisibilityDefault(visibility, eventType),
 		Transparency:       applyEventTypeTransparencyDefault(transparency, eventType),
-		ConferenceData:     buildConferenceData(conferenceChoice{provider: conferenceProvider(c.WithMeet, c.WithZoom)}),
-		Attachments:        buildAttachments(c.Attachments),
-		ExtendedProperties: buildExtendedProperties(c.PrivateProps, c.SharedProps),
+		ConferenceData:     buildConferenceData(conferenceChoice{provider: conferenceProvider(input.WithMeet, input.WithZoom)}),
+		Attachments:        buildAttachments(input.Attachments),
+		ExtendedProperties: buildExtendedProperties(input.PrivateProps, input.SharedProps),
 	}
-	if c.GuestsCanInviteOthers != nil {
-		event.GuestsCanInviteOthers = c.GuestsCanInviteOthers
+	if input.GuestsCanInviteOthers != nil {
+		event.GuestsCanInviteOthers = input.GuestsCanInviteOthers
 	}
-	if c.GuestsCanModify != nil {
-		event.GuestsCanModify = *c.GuestsCanModify
+	if input.GuestsCanModify != nil {
+		event.GuestsCanModify = *input.GuestsCanModify
 	}
-	if c.GuestsCanSeeOthers != nil {
-		event.GuestsCanSeeOtherGuests = c.GuestsCanSeeOthers
+	if input.GuestsCanSeeOthers != nil {
+		event.GuestsCanSeeOtherGuests = input.GuestsCanSeeOthers
 	}
-	if strings.TrimSpace(c.SourceUrl) != "" {
+	if strings.TrimSpace(input.SourceURL) != "" {
 		event.Source = &calendar.EventSource{
-			Url:   strings.TrimSpace(c.SourceUrl),
-			Title: strings.TrimSpace(c.SourceTitle),
+			Url:   strings.TrimSpace(input.SourceURL),
+			Title: strings.TrimSpace(input.SourceTitle),
 		}
 	}
-	if c.resolvedPlace != nil {
-		event.Location = formatCalendarPlaceLocation(c.resolvedPlace)
-		applyCalendarPlaceProperties(event, c.resolvedPlace)
+	if input.ResolvedPlace != nil {
+		event.Location = formatCalendarPlaceLocation(input.ResolvedPlace)
+		applyCalendarPlaceProperties(event, input.ResolvedPlace)
 	}
 
-	if err := c.applyCreateEventType(event, eventType); err != nil {
+	if err := applyCreateEventType(event, input, eventType); err != nil {
 		return nil, err
 	}
 
 	return &calendarCreatePlan{
-		CalendarID:  strings.TrimSpace(c.CalendarID),
+		CalendarID:  calendarID,
 		SendUpdates: sendUpdates,
-		WithMeet:    c.WithMeet,
-		WithZoom:    c.WithZoom,
+		WithMeet:    input.WithMeet,
+		WithZoom:    input.WithZoom,
+		PlaceLookup: placeLookup,
 		Event:       event,
 	}, nil
+}
+
+func (p *calendarCreatePlan) dryRunRequest() map[string]any {
+	request := map[string]any{
+		"calendar_id":          p.CalendarID,
+		"send_updates":         p.SendUpdates,
+		"conference_version_1": p.WithMeet,
+		"supports_attachments": len(p.Event.Attachments) > 0,
+		"event":                p.Event,
+	}
+	if p.WithZoom {
+		request["zoom"] = zoomDryRunPayload("create")
+	}
+	if p.PlaceLookup != nil {
+		request["place_lookup"] = p.PlaceLookup.dryRunPayload()
+	}
+	return request
+}
+
+func resolveCreateEventType(input calendarCreateInput) (string, error) {
+	focusFlags := strings.TrimSpace(input.FocusAutoDecline) != "" ||
+		strings.TrimSpace(input.FocusDeclineMessage) != "" ||
+		strings.TrimSpace(input.FocusChatStatus) != ""
+	oooFlags := strings.TrimSpace(input.OOOAutoDecline) != "" ||
+		strings.TrimSpace(input.OOODeclineMessage) != ""
+	workingFlags := strings.TrimSpace(input.WorkingLocationType) != "" ||
+		strings.TrimSpace(input.WorkingOfficeLabel) != "" ||
+		strings.TrimSpace(input.WorkingBuildingID) != "" ||
+		strings.TrimSpace(input.WorkingFloorID) != "" ||
+		strings.TrimSpace(input.WorkingDeskID) != "" ||
+		strings.TrimSpace(input.WorkingCustomLabel) != ""
+
+	return resolveEventType(input.EventType, focusFlags, oooFlags, workingFlags)
+}
+
+func defaultCreateSummaryForEventType(input calendarCreateInput, eventType string) string {
+	switch eventType {
+	case eventTypeFocusTime:
+		return defaultFocusSummary
+	case eventTypeOutOfOffice:
+		return defaultOOOSummary
+	case eventTypeWorkingLocation:
+		return workingLocationSummary(workingLocationInput{
+			Type:        input.WorkingLocationType,
+			OfficeLabel: input.WorkingOfficeLabel,
+			CustomLabel: input.WorkingCustomLabel,
+		})
+	default:
+		return ""
+	}
+}
+
+func resolveCreateAllDay(from, to string, allDay bool, eventType string) (bool, error) {
+	if eventType == eventTypeOutOfOffice {
+		if allDay {
+			return false, usage("out-of-office events cannot be all-day; provide RFC3339 datetime --from/--to without --all-day")
+		}
+		if !strings.Contains(from, "T") || !strings.Contains(to, "T") {
+			return false, usage("out-of-office requires RFC3339 datetime --from/--to; date-only out-of-office events are not supported by Google Calendar API")
+		}
+		return false, nil
+	}
+	if eventType != eventTypeWorkingLocation {
+		return allDay, nil
+	}
+	if strings.Contains(from, "T") || strings.Contains(to, "T") {
+		return false, usage("working-location requires date-only --from/--to (YYYY-MM-DD)")
+	}
+	return true, nil
+}
+
+func applyEventTypeTransparencyDefault(transparency, eventType string) string {
+	if transparency == "" && (eventType == eventTypeFocusTime || eventType == eventTypeOutOfOffice) {
+		return transparencyOpaque
+	}
+	if transparency == "" && eventType == eventTypeWorkingLocation {
+		return transparencyTransparent
+	}
+	return transparency
+}
+
+func applyEventTypeVisibilityDefault(visibility, eventType string) string {
+	if visibility == "" && eventType == eventTypeWorkingLocation {
+		return visibilityPublic
+	}
+	return visibility
+}
+
+func applyCreateEventType(event *calendar.Event, input calendarCreateInput, eventType string) error {
+	switch eventType {
+	case eventTypeDefault:
+		event.EventType = eventTypeDefault
+	case eventTypeFocusTime:
+		props, err := buildFocusTimeProperties(focusTimeInput{
+			AutoDecline:    input.FocusAutoDecline,
+			DeclineMessage: input.FocusDeclineMessage,
+			ChatStatus:     input.FocusChatStatus,
+		})
+		if err != nil {
+			return err
+		}
+		event.EventType = eventTypeFocusTime
+		event.FocusTimeProperties = props
+	case eventTypeOutOfOffice:
+		props, err := buildOutOfOfficeProperties(outOfOfficeInput{
+			AutoDecline:            input.OOOAutoDecline,
+			DeclineMessage:         input.OOODeclineMessage,
+			DeclineMessageProvided: false,
+		})
+		if err != nil {
+			return err
+		}
+		event.EventType = eventTypeOutOfOffice
+		event.OutOfOfficeProperties = props
+	case eventTypeWorkingLocation:
+		props, err := buildWorkingLocationProperties(workingLocationInput{
+			Type:        input.WorkingLocationType,
+			OfficeLabel: input.WorkingOfficeLabel,
+			BuildingId:  input.WorkingBuildingID,
+			FloorId:     input.WorkingFloorID,
+			DeskId:      input.WorkingDeskID,
+			CustomLabel: input.WorkingCustomLabel,
+		})
+		if err != nil {
+			return err
+		}
+		event.EventType = eventTypeWorkingLocation
+		event.WorkingLocationProperties = props
+	}
+	return nil
 }
 
 func conferenceProvider(withMeet, withZoom bool) string {
