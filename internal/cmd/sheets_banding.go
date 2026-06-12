@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 
 	"google.golang.org/api/sheets/v4"
@@ -90,7 +89,7 @@ func (c *SheetsBandingSetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{
 			"spreadsheetId": spreadsheetID,
 			"bandedRangeId": bandedRangeID,
 			"range":         rangeSpec,
@@ -129,7 +128,7 @@ func (c *SheetsBandingListCmd) Run(ctx context.Context, flags *RootFlags) error 
 
 	items := bandingItems(resp, strings.TrimSpace(c.Sheet))
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"bandedRanges": items})
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{"bandedRanges": items})
 	}
 	if len(items) == 0 {
 		u.Err().Println("No banded ranges")
@@ -213,7 +212,7 @@ func (c *SheetsBandingClearCmd) Run(ctx context.Context, flags *RootFlags) error
 
 	if len(requests) == 0 {
 		if outfmt.IsJSON(ctx) {
-			return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"removed": 0})
+			return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{"removed": 0})
 		}
 		ui.FromContext(ctx).Out().Println("No banded ranges to remove")
 		return nil
@@ -241,7 +240,7 @@ func (c *SheetsBandingClearCmd) Run(ctx context.Context, flags *RootFlags) error
 		return err
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{
 			"spreadsheetId": spreadsheetID,
 			"removed":       removed,
 		})

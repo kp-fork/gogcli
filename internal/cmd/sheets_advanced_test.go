@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -9,15 +10,11 @@ import (
 	"strings"
 	"testing"
 
-	"google.golang.org/api/option"
 	"google.golang.org/api/sheets/v4"
-
-	"github.com/steipete/gogcli/internal/outfmt"
-	"github.com/steipete/gogcli/internal/ui"
 )
 
 func TestSheetsConditionalAddBuildsRule(t *testing.T) {
-	ctx, flags, requests, rawRequests, cleanup := newSheetsAdvancedTestContext(t, sheetsAdvancedTestState{})
+	ctx, flags, requests, rawRequests, _, cleanup := newSheetsAdvancedTestContext(t, sheetsAdvancedTestState{})
 	defer cleanup()
 
 	if err := runKong(t, &SheetsConditionalAddCmd{}, []string{
@@ -59,11 +56,7 @@ func TestSheetsConditionalAddBuildsRule(t *testing.T) {
 }
 
 func TestSheetsConditionalAdd_InvalidFormatFieldIsUsage(t *testing.T) {
-	u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
-	if uiErr != nil {
-		t.Fatalf("ui.New: %v", uiErr)
-	}
-	ctx := ui.WithUI(context.Background(), u)
+	ctx := newCmdRuntimeOutputContext(t, io.Discard, io.Discard)
 	flags := &RootFlags{Account: "a@b.com", DryRun: true}
 
 	err := runKong(t, &SheetsConditionalAddCmd{}, []string{
@@ -82,7 +75,7 @@ func TestSheetsConditionalAdd_InvalidFormatFieldIsUsage(t *testing.T) {
 }
 
 func TestSheetsConditionalClearAllDeletesReverseAndRequiresForce(t *testing.T) {
-	ctx, flags, requests, _, cleanup := newSheetsAdvancedTestContext(t, sheetsAdvancedTestState{
+	ctx, flags, requests, _, _, cleanup := newSheetsAdvancedTestContext(t, sheetsAdvancedTestState{
 		ConditionalRules: 2,
 	})
 	defer cleanup()
@@ -115,16 +108,15 @@ func TestSheetsConditionalClearAllDeletesReverseAndRequiresForce(t *testing.T) {
 }
 
 func TestSheetsBandingSetListAndClear(t *testing.T) {
-	ctx, flags, requests, _, cleanup := newSheetsAdvancedTestContext(t, sheetsAdvancedTestState{
+	ctx, flags, requests, _, output, cleanup := newSheetsAdvancedTestContext(t, sheetsAdvancedTestState{
 		BandedRangeID: 777,
 	})
 	defer cleanup()
 
-	out := captureStdout(t, func() {
-		if err := runKong(t, &SheetsBandingSetCmd{}, []string{"s1", "Sheet1!A1:C5"}, ctx, flags); err != nil {
-			t.Fatalf("banding set: %v", err)
-		}
-	})
+	if err := runKong(t, &SheetsBandingSetCmd{}, []string{"s1", "Sheet1!A1:C5"}, ctx, flags); err != nil {
+		t.Fatalf("banding set: %v", err)
+	}
+	out := output.String()
 	if !strings.Contains(out, `"bandedRangeId": 777`) {
 		t.Fatalf("missing banded range id output: %s", out)
 	}
@@ -139,11 +131,11 @@ func TestSheetsBandingSetListAndClear(t *testing.T) {
 		t.Fatalf("missing default row banding properties: %#v", add.RowProperties)
 	}
 
-	listOut := captureStdout(t, func() {
-		if err := runKong(t, &SheetsBandingListCmd{}, []string{"s1"}, ctx, flags); err != nil {
-			t.Fatalf("banding list: %v", err)
-		}
-	})
+	output.Reset()
+	if err := runKong(t, &SheetsBandingListCmd{}, []string{"s1"}, ctx, flags); err != nil {
+		t.Fatalf("banding list: %v", err)
+	}
+	listOut := output.String()
 	if !strings.Contains(listOut, `"bandedRangeId": 777`) || !strings.Contains(listOut, `"a1": "Sheet1!A1:C5"`) {
 		t.Fatalf("missing banding list output: %s", listOut)
 	}
@@ -200,10 +192,9 @@ type sheetsAdvancedTestState struct {
 	BandedRangeID    int64
 }
 
-func newSheetsAdvancedTestContext(t *testing.T, state sheetsAdvancedTestState) (context.Context, *RootFlags, *[]sheets.BatchUpdateSpreadsheetRequest, *[]string, func()) {
+func newSheetsAdvancedTestContext(t *testing.T, state sheetsAdvancedTestState) (context.Context, *RootFlags, *[]sheets.BatchUpdateSpreadsheetRequest, *[]string, *bytes.Buffer, func()) {
 	t.Helper()
 
-	origNew := newSheetsService
 	requests := []sheets.BatchUpdateSpreadsheetRequest{}
 	rawRequests := []string{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -230,27 +221,11 @@ func newSheetsAdvancedTestContext(t *testing.T, state sheetsAdvancedTestState) (
 		}
 	}))
 
-	svc, err := sheets.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
-	newSheetsService = func(context.Context, string) (*sheets.Service, error) { return svc, nil }
-
-	u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
-	if uiErr != nil {
-		t.Fatalf("ui.New: %v", uiErr)
-	}
-	ctx := outfmt.WithMode(ui.WithUI(context.Background(), u), outfmt.Mode{JSON: true})
+	svc := newSheetsServiceFromServer(t, srv)
+	output := &bytes.Buffer{}
+	ctx := withSheetsTestService(newCmdRuntimeJSONOutputContext(t, output, io.Discard), svc)
 	flags := &RootFlags{Account: "a@b.com"}
-	cleanup := func() {
-		newSheetsService = origNew
-		srv.Close()
-	}
-	return ctx, flags, &requests, &rawRequests, cleanup
+	return ctx, flags, &requests, &rawRequests, output, srv.Close
 }
 
 func writeSheetsAdvancedMetadata(t *testing.T, w http.ResponseWriter, state sheetsAdvancedTestState) {
