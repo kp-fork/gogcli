@@ -209,7 +209,7 @@ func (c *GmailWatchStopCmd) Run(ctx context.Context, flags *RootFlags) error {
 		_ = os.Remove(store.path)
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"stopped": true})
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{"stopped": true})
 	}
 	u.Out().Linef("stopped\ttrue")
 	return nil
@@ -343,11 +343,12 @@ func (c *GmailWatchServeCmd) Run(ctx context.Context, kctx *kong.Context, flags 
 	}
 
 	selectedClient := strings.TrimSpace(flags.Client)
+	gmailFactory := gmailServiceFactory(ctx)
 	serviceFactory := func(ctx context.Context, account string) (*gmail.Service, error) {
 		if selectedClient != "" {
 			ctx = authclient.WithClient(ctx, selectedClient)
 		}
-		return gmailService(ctx, account)
+		return gmailFactory(ctx, account)
 	}
 
 	hookClient := &http.Client{Timeout: cfg.HookTimeout}
@@ -380,9 +381,9 @@ func writeWatchState(ctx context.Context, state gmailWatchState, showSecrets boo
 			h := *state.Hook
 			h.Token = "[REDACTED]"
 			redacted.Hook = &h
-			return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"watch": redacted})
+			return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{"watch": redacted})
 		}
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"watch": state})
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{"watch": state})
 	}
 	u := ui.FromContext(ctx)
 	u.Out().Linef("account\t%s", state.Account)

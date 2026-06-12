@@ -11,7 +11,6 @@ import (
 	"google.golang.org/api/idtoken"
 
 	"github.com/steipete/gogcli/internal/authclient"
-	"github.com/steipete/gogcli/internal/ui"
 )
 
 func TestGmailWatchServeCmd_UsesStoredHook(t *testing.T) {
@@ -48,11 +47,8 @@ func TestGmailWatchServeCmd_UsesStoredHook(t *testing.T) {
 		return nil
 	}
 
-	u, err := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
-	if err != nil {
-		t.Fatalf("ui.New: %v", err)
-	}
-	if execErr := runKong(t, &GmailWatchServeCmd{}, []string{"--port", "9999", "--path", "/hook"}, ui.WithUI(context.Background(), u), flags); execErr != nil {
+	ctx := newCmdRuntimeOutputContext(t, io.Discard, io.Discard)
+	if execErr := runKong(t, &GmailWatchServeCmd{}, []string{"--port", "9999", "--path", "/hook"}, ctx, flags); execErr != nil {
 		t.Fatalf("execute: %v", execErr)
 	}
 	if got == nil {
@@ -96,11 +92,8 @@ func TestGmailWatchServeCmd_DefaultMaxBytes(t *testing.T) {
 		return nil
 	}
 
-	u, err := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
-	if err != nil {
-		t.Fatalf("ui.New: %v", err)
-	}
-	if execErr := runKong(t, &GmailWatchServeCmd{}, []string{"--port", "9999", "--path", "/hook", "--max-bytes", "0"}, ui.WithUI(context.Background(), u), flags); execErr != nil {
+	ctx := newCmdRuntimeOutputContext(t, io.Discard, io.Discard)
+	if execErr := runKong(t, &GmailWatchServeCmd{}, []string{"--port", "9999", "--path", "/hook", "--max-bytes", "0"}, ctx, flags); execErr != nil {
 		t.Fatalf("execute: %v", execErr)
 	}
 	if got == nil {
@@ -147,11 +140,8 @@ func TestGmailWatchServeCmd_FetchDelaySeconds(t *testing.T) {
 		return nil
 	}
 
-	u, err := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
-	if err != nil {
-		t.Fatalf("ui.New: %v", err)
-	}
-	if execErr := runKong(t, &GmailWatchServeCmd{}, []string{"--port", "9999", "--path", "/hook", "--fetch-delay", "5"}, ui.WithUI(context.Background(), u), flags); execErr != nil {
+	ctx := newCmdRuntimeOutputContext(t, io.Discard, io.Discard)
+	if execErr := runKong(t, &GmailWatchServeCmd{}, []string{"--port", "9999", "--path", "/hook", "--fetch-delay", "5"}, ctx, flags); execErr != nil {
 		t.Fatalf("execute: %v", execErr)
 	}
 	if got == nil {
@@ -189,11 +179,8 @@ func TestGmailWatchServeCmd_FetchDelayDuration(t *testing.T) {
 		return nil
 	}
 
-	u, err := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
-	if err != nil {
-		t.Fatalf("ui.New: %v", err)
-	}
-	if execErr := runKong(t, &GmailWatchServeCmd{}, []string{"--port", "9999", "--path", "/hook", "--fetch-delay", "750ms"}, ui.WithUI(context.Background(), u), flags); execErr != nil {
+	ctx := newCmdRuntimeOutputContext(t, io.Discard, io.Discard)
+	if execErr := runKong(t, &GmailWatchServeCmd{}, []string{"--port", "9999", "--path", "/hook", "--fetch-delay", "750ms"}, ctx, flags); execErr != nil {
 		t.Fatalf("execute: %v", execErr)
 	}
 	if got == nil {
@@ -231,11 +218,8 @@ func TestGmailWatchServeCmd_ExcludeLabels_Disable(t *testing.T) {
 		return nil
 	}
 
-	u, err := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
-	if err != nil {
-		t.Fatalf("ui.New: %v", err)
-	}
-	if execErr := runKong(t, &GmailWatchServeCmd{}, []string{"--port", "9999", "--path", "/hook", "--exclude-labels", ""}, ui.WithUI(context.Background(), u), flags); execErr != nil {
+	ctx := newCmdRuntimeOutputContext(t, io.Discard, io.Discard)
+	if execErr := runKong(t, &GmailWatchServeCmd{}, []string{"--port", "9999", "--path", "/hook", "--exclude-labels", ""}, ctx, flags); execErr != nil {
 		t.Fatalf("execute: %v", execErr)
 	}
 	if got == nil {
@@ -280,10 +264,7 @@ func TestGmailWatchServeCmd_SaveHookAndOIDC(t *testing.T) {
 		return &idtoken.Validator{}, nil
 	}
 
-	u, err := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
-	if err != nil {
-		t.Fatalf("ui.New: %v", err)
-	}
+	ctx := newCmdRuntimeOutputContext(t, io.Discard, io.Discard)
 	if execErr := runKong(t, &GmailWatchServeCmd{}, []string{
 		"--port", "9999",
 		"--path", "/hook",
@@ -293,7 +274,7 @@ func TestGmailWatchServeCmd_SaveHookAndOIDC(t *testing.T) {
 		"--include-body",
 		"--max-bytes", "10",
 		"--save-hook",
-	}, ui.WithUI(context.Background(), u), flags); execErr != nil {
+	}, ctx, flags); execErr != nil {
 		t.Fatalf("execute: %v", execErr)
 	}
 	if got == nil || got.validator == nil || !got.cfg.VerifyOIDC {
@@ -311,11 +292,7 @@ func TestGmailWatchServeCmd_SaveHookAndOIDC(t *testing.T) {
 
 func TestGmailWatchServeCmd_PreservesClientOverrideForRequestContexts(t *testing.T) {
 	origListen := listenAndServe
-	origNew := newGmailService
-	t.Cleanup(func() {
-		listenAndServe = origListen
-		newGmailService = origNew
-	})
+	t.Cleanup(func() { listenAndServe = origListen })
 
 	setWatchTestConfigHome(t)
 
@@ -340,18 +317,13 @@ func TestGmailWatchServeCmd_PreservesClientOverrideForRequestContexts(t *testing
 		return nil
 	}
 
-	newGmailService = func(ctx context.Context, _ string) (*gmail.Service, error) {
+	ctx := withGmailTestServiceFactory(newCmdRuntimeOutputContext(t, io.Discard, io.Discard), func(ctx context.Context, _ string) (*gmail.Service, error) {
 		if client := authclient.ClientOverrideFromContext(ctx); client != "personal" {
 			t.Fatalf("expected client override personal, got %q", client)
 		}
 		return &gmail.Service{}, nil
-	}
-
-	u, err := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
-	if err != nil {
-		t.Fatalf("ui.New: %v", err)
-	}
-	if execErr := runKong(t, &GmailWatchServeCmd{}, []string{"--port", "9999", "--path", "/hook"}, ui.WithUI(context.Background(), u), flags); execErr != nil {
+	})
+	if execErr := runKong(t, &GmailWatchServeCmd{}, []string{"--port", "9999", "--path", "/hook"}, ctx, flags); execErr != nil {
 		t.Fatalf("execute: %v", execErr)
 	}
 	if got == nil {

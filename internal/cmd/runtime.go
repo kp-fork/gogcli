@@ -97,10 +97,14 @@ func driveService(ctx context.Context, account string) (*drive.Service, error) {
 }
 
 func gmailService(ctx context.Context, account string) (*gmail.Service, error) {
+	return gmailServiceFactory(ctx)(ctx, account)
+}
+
+func gmailServiceFactory(ctx context.Context) app.GmailServiceFactory {
 	if runtime, ok := app.FromContext(ctx); ok && runtime.Services.Gmail != nil {
-		return runtime.Services.Gmail(ctx, account)
+		return runtime.Services.Gmail
 	}
-	return newGmailService(ctx, account)
+	return newGmailService
 }
 
 func peopleContactsService(ctx context.Context, account string) (*people.Service, error) {
