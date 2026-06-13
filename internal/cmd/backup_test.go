@@ -60,7 +60,10 @@ func TestBuildGmailMessageShardsBucketsSortsAndChunks(t *testing.T) {
 		{ID: "april-earlier-a", InternalDate: mustUnixMilli(t, "2026-04-01T10:00:00Z"), Raw: "raw-1a"},
 	}
 
-	shards, err := buildGmailMessageShards(accountHash, messages, 2)
+	shards, err := gmailbackup.BuildMessageShardsFromMessages(context.Background(), messages, gmailbackup.ShardOptions{
+		AccountHash: accountHash,
+		MaxRows:     2,
+	})
 	if err != nil {
 		t.Fatalf("buildGmailMessageShards: %v", err)
 	}
@@ -102,7 +105,11 @@ func TestBuildGmailMessageShardsSplitsByPlaintextSize(t *testing.T) {
 		{ID: "m3", InternalDate: mustUnixMilli(t, "2026-04-03T10:00:00Z"), Raw: strings.Repeat("raw-3", 8)},
 	}
 
-	shards, err := buildGmailMessageShardsWithLimit(accountHash, messages, 100, 1)
+	shards, err := gmailbackup.BuildMessageShardsFromMessages(context.Background(), messages, gmailbackup.ShardOptions{
+		AccountHash:      accountHash,
+		MaxRows:          100,
+		MaxPlaintextSize: 1,
+	})
 	if err != nil {
 		t.Fatalf("buildGmailMessageShardsWithLimit: %v", err)
 	}
@@ -635,14 +642,18 @@ func TestBuildGmailCheckpointShardFromCacheWritesPlaintextPath(t *testing.T) {
 			t.Fatalf("WriteMessage: %v", err)
 		}
 	}
-	shard, err := buildGmailCheckpointShardFromCache(gmailBackupOptions{
-		AccountHash:     accountHash,
-		CheckpointRunID: "run-test",
-		Cache:           cache,
-	}, 3, []string{"m1", "m2"})
+	shards, err := gmailbackup.BuildCheckpointShards(context.Background(), cache, []string{"m1", "m2"}, gmailbackup.CheckpointShardOptions{
+		AccountHash: accountHash,
+		RunID:       "run-test",
+		FirstPart:   3,
+	})
 	if err != nil {
-		t.Fatalf("buildGmailCheckpointShardFromCache: %v", err)
+		t.Fatalf("BuildCheckpointShards: %v", err)
 	}
+	if len(shards) != 1 {
+		t.Fatalf("len(shards) = %d, want 1", len(shards))
+	}
+	shard := shards[0]
 	if shard.Path != "checkpoints/gmail/accthash/run-test/messages/part-000003.jsonl.gz.age" {
 		t.Fatalf("checkpoint shard path = %q", shard.Path)
 	}
@@ -665,7 +676,7 @@ func TestBuildGmailCheckpointShardFromCacheWritesPlaintextPath(t *testing.T) {
 func TestBuildGmailCheckpointShardsFromCacheSplitsLargeChunks(t *testing.T) {
 	accountHash := "accthash"
 	cache := newGmailBackupTestCache(t)
-	ids := make([]string, gmailCheckpointShardMaxRows+1)
+	ids := make([]string, gmailbackup.DefaultCheckpointShardMaxRows+1)
 	for i := range ids {
 		id := fmt.Sprintf("m-%04d", i)
 		ids[i] = id
@@ -673,18 +684,18 @@ func TestBuildGmailCheckpointShardsFromCacheSplitsLargeChunks(t *testing.T) {
 			t.Fatalf("WriteMessage: %v", err)
 		}
 	}
-	shards, err := buildGmailCheckpointShardsFromCache(gmailBackupOptions{
-		AccountHash:     accountHash,
-		CheckpointRunID: "run-test",
-		Cache:           cache,
-	}, 7, ids)
+	shards, err := gmailbackup.BuildCheckpointShards(context.Background(), cache, ids, gmailbackup.CheckpointShardOptions{
+		AccountHash: accountHash,
+		RunID:       "run-test",
+		FirstPart:   7,
+	})
 	if err != nil {
 		t.Fatalf("buildGmailCheckpointShardsFromCache: %v", err)
 	}
 	if len(shards) != 2 {
 		t.Fatalf("len(shards) = %d, want 2", len(shards))
 	}
-	if shards[0].Rows != gmailCheckpointShardMaxRows || shards[1].Rows != 1 {
+	if shards[0].Rows != gmailbackup.DefaultCheckpointShardMaxRows || shards[1].Rows != 1 {
 		t.Fatalf("rows = %d,%d", shards[0].Rows, shards[1].Rows)
 	}
 	if !strings.HasSuffix(shards[0].Path, "part-000007.jsonl.gz.age") || !strings.HasSuffix(shards[1].Path, "part-000008.jsonl.gz.age") {
@@ -693,9 +704,6 @@ func TestBuildGmailCheckpointShardsFromCacheSplitsLargeChunks(t *testing.T) {
 }
 
 func TestBuildGmailCheckpointShardsFromCacheSplitsByPlaintextSize(t *testing.T) {
-	oldLimit := gmailCheckpointShardMaxPlaintextBytes
-	gmailCheckpointShardMaxPlaintextBytes = 1
-	t.Cleanup(func() { gmailCheckpointShardMaxPlaintextBytes = oldLimit })
 	accountHash := "accthash"
 	cache := newGmailBackupTestCache(t)
 	ids := []string{"m1", "m2", "m3"}
@@ -704,11 +712,12 @@ func TestBuildGmailCheckpointShardsFromCacheSplitsByPlaintextSize(t *testing.T) 
 			t.Fatalf("WriteMessage: %v", err)
 		}
 	}
-	shards, err := buildGmailCheckpointShardsFromCache(gmailBackupOptions{
-		AccountHash:     accountHash,
-		CheckpointRunID: "run-test",
-		Cache:           cache,
-	}, 11, ids)
+	shards, err := gmailbackup.BuildCheckpointShards(context.Background(), cache, ids, gmailbackup.CheckpointShardOptions{
+		AccountHash:      accountHash,
+		RunID:            "run-test",
+		FirstPart:        11,
+		MaxPlaintextSize: 1,
+	})
 	if err != nil {
 		t.Fatalf("buildGmailCheckpointShardsFromCache: %v", err)
 	}
@@ -739,11 +748,11 @@ func TestBuildGmailMessageShardsFromCacheSplitsByPlaintextSize(t *testing.T) {
 			t.Fatalf("WriteMessage: %v", err)
 		}
 	}
-	shards, err := buildGmailMessageShardsFromCacheWithLimit(context.Background(), gmailBackupOptions{
-		AccountHash:  accountHash,
-		ShardMaxRows: 100,
-		Cache:        cache,
-	}, ids, 1)
+	shards, err := gmailbackup.BuildMessageShards(context.Background(), cache, ids, gmailbackup.ShardOptions{
+		AccountHash:      accountHash,
+		MaxRows:          100,
+		MaxPlaintextSize: 1,
+	})
 	if err != nil {
 		t.Fatalf("buildGmailMessageShardsFromCacheWithLimit: %v", err)
 	}
@@ -774,11 +783,10 @@ func TestBuildGmailMessageShardsFromCacheWritesPlaintextPaths(t *testing.T) {
 			t.Fatalf("WriteMessage: %v", err)
 		}
 	}
-	shards, err := buildGmailMessageShardsFromCache(context.Background(), gmailBackupOptions{
-		AccountHash:  accountHash,
-		ShardMaxRows: 1,
-		Cache:        cache,
-	}, []string{"april-b", "april-a", "march-a"})
+	shards, err := gmailbackup.BuildMessageShards(context.Background(), cache, []string{"april-b", "april-a", "march-a"}, gmailbackup.ShardOptions{
+		AccountHash: accountHash,
+		MaxRows:     1,
+	})
 	if err != nil {
 		t.Fatalf("buildGmailMessageShardsFromCache: %v", err)
 	}
