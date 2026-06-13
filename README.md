@@ -183,6 +183,8 @@ Docs: [`gog calendar`](docs/commands/gog-calendar.md),
 [`calendar create`](docs/commands/gog-calendar-create.md),
 [`calendar update`](docs/commands/gog-calendar-update.md),
 [`calendar move`](docs/commands/gog-calendar-move.md),
+[`calendar delete-calendar`](docs/commands/gog-calendar-delete-calendar.md),
+[`calendar unsubscribe`](docs/commands/gog-calendar-unsubscribe.md),
 [Zoom setup](docs/zoom-auth-setup.md).
 
 ```bash
@@ -205,6 +207,10 @@ gog calendar create primary --summary "Client sync" \
   --to "2026-05-06T11:30:00+02:00" \
   --with-zoom
 gog calendar move primary <eventId> team-calendar@example.com
+gog calendar create-calendar "Project calendar" --timezone Europe/London
+gog calendar delete-calendar <calendarId> --force
+gog calendar subscribe en.uk#holiday@group.v.calendar.google.com
+gog calendar unsubscribe en.uk#holiday@group.v.calendar.google.com --force
 gog calendar appointments
 ```
 

@@ -297,6 +297,16 @@ func TestDryRunE2E_MutatingCommandsSkipAuthAndAPI(t *testing.T) {
 			op:   "calendar.subscribe",
 		},
 		{
+			name: "calendar unsubscribe",
+			args: []string{"calendar", "unsubscribe", "other@example.com"},
+			op:   "calendar.unsubscribe",
+		},
+		{
+			name: "calendar delete-calendar",
+			args: []string{"calendar", "delete-calendar", "owned@example.com"},
+			op:   "calendar.delete-calendar",
+		},
+		{
 			name: "calendar focus time",
 			args: []string{"calendar", "focus-time", "primary", "--from", "2030-01-01T10:00:00Z", "--to", "2030-01-01T11:00:00Z"},
 			op:   "calendar.focus-time",

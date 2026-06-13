@@ -2,7 +2,7 @@
 
 Every `gog` command has a generated docs page. The source of truth is the live CLI schema; run `make docs-commands` after changing command names, flags, help text, aliases, or arguments.
 
-Generated pages: 642.
+Generated pages: 644.
 
 ## Top-level Commands
 
@@ -138,6 +138,7 @@ Generated pages: 642.
     - [gog calendar create](gog-calendar-create.md) - Create an event
     - [gog calendar create-calendar](gog-calendar-create-calendar.md) - Create a new secondary calendar
     - [gog calendar delete](gog-calendar-delete.md) - Delete an event
+    - [gog calendar delete-calendar](gog-calendar-delete-calendar.md) - Delete an owned secondary calendar
     - [gog calendar event](gog-calendar-event.md) - Get event
     - [gog calendar events](gog-calendar-events.md) - List events from a calendar or all calendars
     - [gog calendar focus-time](gog-calendar-focus-time.md) - Create a Focus Time block
@@ -151,6 +152,7 @@ Generated pages: 642.
     - [gog calendar subscribe](gog-calendar-subscribe.md) - Add a calendar to your calendar list
     - [gog calendar team](gog-calendar-team.md) - Show events for Workspace group members (service account, direct token, or ADC)
     - [gog calendar time](gog-calendar-time.md) - Show server time
+    - [gog calendar unsubscribe](gog-calendar-unsubscribe.md) - Remove a calendar from your calendar list
     - [gog calendar update](gog-calendar-update.md) - Update an event
     - [gog calendar users](gog-calendar-users.md) - List workspace users (use their email as calendar ID)
     - [gog calendar working-location](gog-calendar-working-location.md) - Set working location (home/office/custom)

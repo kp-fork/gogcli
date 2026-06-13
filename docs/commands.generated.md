@@ -87,6 +87,7 @@ Generated from `gog schema --json`.
     - [`gog calendar (cal) create (add,new) <calendarId> [flags]`](commands/gog-calendar-create.md) - Create an event
     - [`gog calendar (cal) create-calendar (new-calendar) <summary> [flags]`](commands/gog-calendar-create-calendar.md) - Create a new secondary calendar
     - [`gog calendar (cal) delete (rm,del,remove) <calendarId> <eventId> [flags]`](commands/gog-calendar-delete.md) - Delete an event
+    - [`gog calendar (cal) delete-calendar <calendarId>`](commands/gog-calendar-delete-calendar.md) - Delete an owned secondary calendar
     - [`gog calendar (cal) event (get,info,show) <calendarId> <eventId>`](commands/gog-calendar-event.md) - Get event
     - [`gog calendar (cal) events (list,ls) [<calendarId> ...] [flags]`](commands/gog-calendar-events.md) - List events from a calendar or all calendars
     - [`gog calendar (cal) focus-time (focus) --from=STRING --to=STRING [<calendarId>] [flags]`](commands/gog-calendar-focus-time.md) - Create a Focus Time block
@@ -100,6 +101,7 @@ Generated from `gog schema --json`.
     - [`gog calendar (cal) subscribe (sub,add-calendar) <calendarId> [flags]`](commands/gog-calendar-subscribe.md) - Add a calendar to your calendar list
     - [`gog calendar (cal) team <group-email> [flags]`](commands/gog-calendar-team.md) - Show events for Workspace group members (service account, direct token, or ADC)
     - [`gog calendar (cal) time [flags]`](commands/gog-calendar-time.md) - Show server time
+    - [`gog calendar (cal) unsubscribe (unsub) <calendarId>`](commands/gog-calendar-unsubscribe.md) - Remove a calendar from your calendar list
     - [`gog calendar (cal) update (edit,set) <calendarId> <eventId> [flags]`](commands/gog-calendar-update.md) - Update an event
     - [`gog calendar (cal) users [flags]`](commands/gog-calendar-users.md) - List workspace users (use their email as calendar ID)
     - [`gog calendar (cal) working-location (wl) --from=STRING --to=STRING --type=STRING [<calendarId>] [flags]`](commands/gog-calendar-working-location.md) - Set working location (home/office/custom)

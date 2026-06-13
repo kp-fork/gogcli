@@ -1,48 +1,18 @@
-# `gog calendar`
+# `gog calendar unsubscribe`
 
 > Generated from `gog schema --json`. Do not edit this page by hand; run `make docs-commands`.
 
-Google Calendar
+Remove a calendar from your calendar list
 
 ## Usage
 
 ```bash
-gog calendar (cal) <command> [flags]
+gog calendar (cal) unsubscribe (unsub) <calendarId>
 ```
 
 ## Parent
 
-- [gog](gog.md)
-
-## Subcommands
-
-- [gog calendar acl](gog-calendar-acl.md) - List calendar ACL
-- [gog calendar alias](gog-calendar-alias.md) - Manage calendar aliases
-- [gog calendar appointments](gog-calendar-appointments.md) - Report Calendar appointment schedule API limitation
-- [gog calendar calendars](gog-calendar-calendars.md) - List calendars
-- [gog calendar colors](gog-calendar-colors.md) - Show calendar colors
-- [gog calendar conflicts](gog-calendar-conflicts.md) - Find busy-time overlaps across calendars
-- [gog calendar create](gog-calendar-create.md) - Create an event
-- [gog calendar create-calendar](gog-calendar-create-calendar.md) - Create a new secondary calendar
-- [gog calendar delete](gog-calendar-delete.md) - Delete an event
-- [gog calendar delete-calendar](gog-calendar-delete-calendar.md) - Delete an owned secondary calendar
-- [gog calendar event](gog-calendar-event.md) - Get event
-- [gog calendar events](gog-calendar-events.md) - List events from a calendar or all calendars
-- [gog calendar focus-time](gog-calendar-focus-time.md) - Create a Focus Time block
-- [gog calendar freebusy](gog-calendar-freebusy.md) - Get free/busy
-- [gog calendar move](gog-calendar-move.md) - Move an event to another calendar
-- [gog calendar out-of-office](gog-calendar-out-of-office.md) - Create an Out of Office event
-- [gog calendar propose-time](gog-calendar-propose-time.md) - Generate URL to propose a new meeting time (browser-only feature)
-- [gog calendar raw](gog-calendar-raw.md) - Dump raw Google Calendar API response as JSON (Events.Get; lossless; for scripting and LLM consumption)
-- [gog calendar respond](gog-calendar-respond.md) - Respond to an event invitation
-- [gog calendar search](gog-calendar-search.md) - Search events
-- [gog calendar subscribe](gog-calendar-subscribe.md) - Add a calendar to your calendar list
-- [gog calendar team](gog-calendar-team.md) - Show events for Workspace group members (service account, direct token, or ADC)
-- [gog calendar time](gog-calendar-time.md) - Show server time
-- [gog calendar unsubscribe](gog-calendar-unsubscribe.md) - Remove a calendar from your calendar list
-- [gog calendar update](gog-calendar-update.md) - Update an event
-- [gog calendar users](gog-calendar-users.md) - List workspace users (use their email as calendar ID)
-- [gog calendar working-location](gog-calendar-working-location.md) - Set working location (home/office/custom)
+- [gog calendar](gog-calendar.md)
 
 ## Flags
 
@@ -71,5 +41,5 @@ gog calendar (cal) <command> [flags]
 
 ## See Also
 
-- [gog](gog.md)
+- [gog calendar](gog-calendar.md)
 - [Command index](README.md)

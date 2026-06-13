@@ -266,7 +266,10 @@ Drive hierarchy semantics:
 
 - `gog slides thumbnail <presentationId> <slideId> [--size small|medium|large] [--format png|jpeg] [--out PATH]`
 - `gog calendar calendars`
+- `gog calendar subscribe <calendarId>`
+- `gog calendar unsubscribe <calendarId>`
 - `gog calendar create-calendar <summary> [--description D] [--timezone TZ] [--location L]`
+- `gog calendar delete-calendar <ownedSecondaryCalendarId>`
 - `gog calendar acl <calendarId>`
 - `gog calendar events <calendarId> [--cal ID_OR_NAME] [--calendars CSV] [--all] [--from RFC3339] [--to RFC3339] [--max N] [--page TOKEN] [--query Q] [--weekday]`
 - `gog calendar appointments` (reports that Google Calendar appointment schedules are not currently exposed by the Calendar API)
@@ -278,6 +281,12 @@ Drive hierarchy semantics:
 - `gog calendar freebusy [calendarIds] [--cal ID_OR_NAME] [--calendars CSV] [--all] --from RFC3339 --to RFC3339`
 - `gog calendar conflicts [--cal ID_OR_NAME] [--calendars CSV] [--all] [--from RFC3339|date|relative] [--to RFC3339|date|relative] [--today|--week|--days N]`
 - `gog calendar respond <calendarId> <eventId> --status accepted|declined|tentative [--send-updates all|none|externalOnly]`
+
+`calendar unsubscribe` removes only the selected entry from the caller's
+calendar list. `calendar delete-calendar` permanently deletes an owned
+secondary calendar; Google may briefly retain a stale calendar-list row after
+the authoritative calendar resource is gone.
+
 - `gog maps places search <query> [--language LANG] [--region REGION] [--fields FIELD_MASK] [--max N]`
 - `gog maps places details <placeId> [--language LANG] [--region REGION] [--fields FIELD_MASK]`
 - `gog maps directions --origin ORIGIN --destination DESTINATION [--mode driving|walking|bicycling|transit] [--language LANG] [--region REGION]`

@@ -5,6 +5,7 @@
 ### Added
 
 - YouTube: add subscription listing and management plus playlist create, add, remove, and delete commands with least-privilege OAuth, dry-run support, structured output, and destructive-operation confirmation. (#767) — thanks @beezly.
+- Calendar: add `unsubscribe` for removing calendar-list entries and `delete-calendar` for deleting owned secondary calendars, with dry-run, confirmation, and structured output.
 
 ### Fixed
 
