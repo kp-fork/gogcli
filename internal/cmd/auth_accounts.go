@@ -51,6 +51,10 @@ func (c *AuthStatusCmd) Run(ctx context.Context, flags *RootFlags) error {
 	if flags != nil {
 		if a, err := requireAccount(flags); err == nil {
 			account = a
+			layout, layoutErr := commandLayout(ctx, config.PathKindConfig, config.PathKindData)
+			if layoutErr != nil {
+				return layoutErr
+			}
 			resolvedClient, resolveErr := resolveClientForEmail(ctx, account, flags)
 			if resolveErr != nil {
 				return resolveErr
@@ -65,7 +69,7 @@ func (c *AuthStatusCmd) Run(ctx context.Context, flags *RootFlags) error {
 				}
 			}
 			clientSecretInKeyring = commandClientSecretInKeyring(ctx, client)
-			if p, _, ok := bestServiceAccountPathAndMtime(normalizeEmail(account)); ok {
+			if p, _, ok := bestServiceAccountPathAndMtime(layout, normalizeEmail(account)); ok {
 				serviceAccountConfigured = true
 				serviceAccountPath = p
 			}
@@ -131,7 +135,11 @@ func (c *AuthListCmd) Run(ctx context.Context, _ *RootFlags) error {
 		return err
 	}
 
-	serviceAccountEmails, err := config.ListServiceAccountEmails()
+	layout, err := commandLayout(ctx, config.PathKindConfig, config.PathKindData)
+	if err != nil {
+		return err
+	}
+	serviceAccountEmails, err := layout.ListServiceAccountEmails()
 	if err != nil {
 		return err
 	}
@@ -146,6 +154,7 @@ func (c *AuthListCmd) Run(ctx context.Context, _ *RootFlags) error {
 	}
 
 	entries := buildAuthListEntries(tokens, tokenReadErrors, serviceAccountEmails)
+	annotateServiceAccountEntries(entries, layout)
 
 	if outfmt.IsJSON(ctx) {
 		return c.writeAuthListJSON(ctx, entries)
@@ -159,13 +168,13 @@ func (c *AuthListCmd) Run(ctx context.Context, _ *RootFlags) error {
 	return c.writeAuthListText(ctx, u, entries)
 }
 
-func bestServiceAccountPathAndMtime(email string) (string, time.Time, bool) {
-	if p, err := config.ExistingServiceAccountPath(email); err == nil {
+func bestServiceAccountPathAndMtime(layout config.Layout, email string) (string, time.Time, bool) {
+	if p, err := layout.ExistingServiceAccountPath(email); err == nil {
 		if st, err := os.Stat(p); err == nil {
 			return p, st.ModTime(), true
 		}
 	}
-	if p, err := config.ExistingKeepServiceAccountPath(email); err == nil {
+	if p, err := layout.ExistingKeepServiceAccountPath(email); err == nil {
 		if st, err := os.Stat(p); err == nil {
 			return p, st.ModTime(), true
 		}
@@ -321,14 +330,12 @@ func (c *AuthKeepCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return parseErr
 	}
 
-	destPath, err := config.KeepServiceAccountPath(email)
+	layout, err := commandLayout(ctx, config.PathKindData)
 	if err != nil {
 		return err
 	}
-	genericPath, err := config.ServiceAccountPath(email)
-	if err != nil {
-		return err
-	}
+	destPath := layout.KeepServiceAccountPath(email)
+	genericPath := layout.ServiceAccountPath(email)
 
 	if err := dryRunExit(ctx, flags, "auth.keep", map[string]any{
 		"email":        email,
@@ -339,7 +346,7 @@ func (c *AuthKeepCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return err
 	}
 
-	if _, err := config.EnsureDataDir(); err != nil {
+	if _, err := layout.EnsureDataDir(); err != nil {
 		return err
 	}
 

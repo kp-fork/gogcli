@@ -68,10 +68,11 @@ func (c *AuthServiceAccountSetCmd) Run(ctx context.Context, flags *RootFlags) er
 		return err
 	}
 
-	destPath, err := config.ServiceAccountPath(email)
+	layout, err := commandLayout(ctx, config.PathKindData)
 	if err != nil {
 		return err
 	}
+	destPath := layout.ServiceAccountPath(email)
 
 	if err := dryRunExit(ctx, flags, "auth.service-account.set", map[string]any{
 		"email":        email,
@@ -83,7 +84,7 @@ func (c *AuthServiceAccountSetCmd) Run(ctx context.Context, flags *RootFlags) er
 		return err
 	}
 
-	if _, err := config.EnsureDataDir(); err != nil {
+	if _, err := layout.EnsureDataDir(); err != nil {
 		return err
 	}
 	if err := config.WriteFileAtomic(destPath, data, 0o600); err != nil {
@@ -180,12 +181,13 @@ func (c *AuthServiceAccountUnsetCmd) Run(ctx context.Context, flags *RootFlags) 
 		return err
 	}
 
-	path, err := config.ServiceAccountPath(email)
+	layout, err := commandLayout(ctx, config.PathKindConfig, config.PathKindData)
 	if err != nil {
 		return err
 	}
+	path := layout.ServiceAccountPath(email)
 
-	removed, err := config.RemoveServiceAccountFiles(email)
+	removed, err := layout.RemoveServiceAccountFiles(email)
 	if err != nil {
 		return fmt.Errorf("remove service account: %w", err)
 	}
@@ -209,7 +211,11 @@ func (c *AuthServiceAccountStatusCmd) Run(ctx context.Context) error {
 		return usage("empty email")
 	}
 
-	path, err := config.ExistingServiceAccountPath(email)
+	layout, err := commandLayout(ctx, config.PathKindConfig, config.PathKindData)
+	if err != nil {
+		return err
+	}
+	path, err := layout.ExistingServiceAccountPath(email)
 	if err != nil {
 		return err
 	}

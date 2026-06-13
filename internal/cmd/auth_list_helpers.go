@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
+	"github.com/steipete/gogcli/internal/config"
 	"github.com/steipete/gogcli/internal/outfmt"
 	"github.com/steipete/gogcli/internal/secrets"
 	"github.com/steipete/gogcli/internal/ui"
@@ -18,12 +20,13 @@ type authTokenReadError struct {
 }
 
 type authListEntry struct {
-	Email    string
-	Client   string
-	Token    *secrets.Token
-	SA       bool
-	ReadErr  error
-	ReadHint string
+	Email     string
+	Client    string
+	Token     *secrets.Token
+	SA        bool
+	ReadErr   error
+	ReadHint  string
+	SACreated time.Time
 }
 
 type authListJSONItem struct {
@@ -177,13 +180,24 @@ func (e authListEntry) details() (client string, created string, services []stri
 		return e.Token.Client, created, e.Token.Services, e.Token.Scopes
 	}
 	if e.SA {
-		if _, mtime, ok := bestServiceAccountPathAndMtime(e.Email); ok {
-			created = mtime.UTC().Format("2006-01-02T15:04:05Z07:00")
+		if !e.SACreated.IsZero() {
+			created = e.SACreated.UTC().Format("2006-01-02T15:04:05Z07:00")
 		}
 		return client, created, []string{"service-account"}, nil
 	}
 
 	return client, created, nil, nil
+}
+
+func annotateServiceAccountEntries(entries []authListEntry, layout config.Layout) {
+	for i := range entries {
+		if !entries[i].SA {
+			continue
+		}
+		if _, created, ok := bestServiceAccountPathAndMtime(layout, entries[i].Email); ok {
+			entries[i].SACreated = created
+		}
+	}
 }
 
 func (c *AuthListCmd) writeAuthListJSON(ctx context.Context, entries []authListEntry) error {

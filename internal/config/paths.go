@@ -2,11 +2,9 @@
 package config
 
 import (
-	"encoding/base64"
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 )
 
@@ -74,16 +72,12 @@ func EnsureDir() (string, error) {
 }
 
 func EnsureDataDir() (string, error) {
-	dir, err := DataDir()
+	layout, err := currentLayoutFor(PathKindData)
 	if err != nil {
 		return "", err
 	}
 
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return "", fmt.Errorf("ensure data dir: %w", err)
-	}
-
-	return dir, nil
+	return layout.EnsureDataDir()
 }
 
 func EnsureStateDir() (string, error) {
@@ -255,14 +249,6 @@ func KeepServiceAccountPath(email string) (string, error) {
 	return layout.KeepServiceAccountPath(email), nil
 }
 
-func KeepServiceAccountLegacySafePath(email string) (string, error) {
-	layout, err := currentLayoutFor(PathKindConfig)
-	if err != nil {
-		return "", err
-	}
-	return layout.KeepServiceAccountLegacySafePath(email), nil
-}
-
 func KeepServiceAccountLegacyPath(email string) (string, error) {
 	layout, err := currentLayoutFor(PathKindConfig)
 	if err != nil {
@@ -288,166 +274,39 @@ func ServiceAccountLegacyPath(email string) (string, error) {
 }
 
 func ExistingServiceAccountPath(email string) (string, error) {
-	if HasExplicitDataOverride() {
-		return firstExistingPath(ServiceAccountPath)(email)
+	layout, err := currentLayoutFor(PathKindConfig, PathKindData)
+	if err != nil {
+		return "", err
 	}
-	return firstExistingPath(ServiceAccountPath, ServiceAccountLegacyPath)(email)
+
+	return layout.ExistingServiceAccountPath(email)
 }
 
 func ExistingKeepServiceAccountPath(email string) (string, error) {
-	if HasExplicitDataOverride() {
-		return firstExistingPath(KeepServiceAccountPath)(email)
+	layout, err := currentLayoutFor(PathKindConfig, PathKindData)
+	if err != nil {
+		return "", err
 	}
-	return firstExistingPath(KeepServiceAccountPath, KeepServiceAccountLegacySafePath, KeepServiceAccountLegacyPath)(email)
+
+	return layout.ExistingKeepServiceAccountPath(email)
 }
 
 func RemoveServiceAccountFiles(email string) (bool, error) {
-	paths := make([]string, 0, 4)
-	pathFns := []func(string) (string, error){
-		ServiceAccountPath,
-		KeepServiceAccountPath,
-	}
-	if !HasExplicitDataOverride() {
-		pathFns = append(pathFns, ServiceAccountLegacyPath, KeepServiceAccountLegacySafePath)
-	}
-	for _, fn := range pathFns {
-		path, err := fn(email)
-		if err != nil {
-			return false, fmt.Errorf("resolve service account path: %w", err)
-		}
-		paths = append(paths, path)
-	}
-	if !HasExplicitDataOverride() {
-		if path, ok, err := keepServiceAccountLegacyDeletePath(email); err != nil {
-			return false, err
-		} else if ok {
-			paths = append(paths, path)
-		}
-	}
-
-	removed := false
-	for _, path := range uniquePaths(paths...) {
-		if err := os.Remove(path); err != nil {
-			if os.IsNotExist(err) {
-				continue
-			}
-			return removed, fmt.Errorf("remove service account file: %w", err)
-		}
-		removed = true
-	}
-	return removed, nil
-}
-
-func keepServiceAccountLegacyDeletePath(email string) (string, bool, error) {
-	if strings.ContainsAny(email, `/\`) {
-		return "", false, nil
-	}
-
-	path, err := KeepServiceAccountLegacyPath(email)
+	layout, err := currentLayoutFor(PathKindConfig, PathKindData)
 	if err != nil {
-		return "", false, fmt.Errorf("resolve service account path: %w", err)
+		return false, err
 	}
 
-	dir, err := Dir()
-	if err != nil {
-		return "", false, fmt.Errorf("resolve service account path: %w", err)
-	}
-
-	cleanPath := filepath.Clean(path)
-	base := filepath.Base(cleanPath)
-	if filepath.Dir(cleanPath) != filepath.Clean(dir) || !strings.HasPrefix(base, "keep-sa-") || !strings.HasSuffix(base, ".json") {
-		return "", false, nil
-	}
-
-	return cleanPath, true, nil
-}
-
-func firstExistingPath(fns ...func(string) (string, error)) func(string) (string, error) {
-	return func(email string) (string, error) {
-		var first string
-		for _, fn := range fns {
-			path, err := fn(email)
-			if err != nil {
-				return "", fmt.Errorf("resolve service account path: %w", err)
-			}
-			if first == "" {
-				first = path
-			}
-			if _, statErr := os.Stat(path); statErr == nil {
-				return path, nil
-			} else if !os.IsNotExist(statErr) {
-				return "", fmt.Errorf("stat service account path: %w", statErr)
-			}
-		}
-		return first, nil
-	}
+	return layout.RemoveServiceAccountFiles(email)
 }
 
 func ListServiceAccountEmails() ([]string, error) {
-	dataDir, err := DataDir()
+	layout, err := currentLayoutFor(PathKindConfig, PathKindData)
 	if err != nil {
 		return nil, err
 	}
 
-	out := make([]string, 0)
-	seen := make(map[string]struct{})
-	dirs := []string{dataDir}
-	if !HasExplicitDataOverride() {
-		configDir, err := Dir()
-		if err != nil {
-			return nil, err
-		}
-		dirs = append(dirs, configDir)
-	}
-	for _, dir := range uniquePaths(dirs...) {
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			if os.IsNotExist(err) {
-				continue
-			}
-			return nil, fmt.Errorf("read service account dir: %w", err)
-		}
-
-		for _, e := range entries {
-			if e.IsDir() {
-				continue
-			}
-			name := e.Name()
-			email := ""
-
-			switch {
-			case strings.HasPrefix(name, "sa-") && strings.HasSuffix(name, ".json"):
-				enc := strings.TrimSuffix(strings.TrimPrefix(name, "sa-"), ".json")
-				if b, err := base64.RawURLEncoding.DecodeString(enc); err == nil {
-					email = strings.TrimSpace(string(b))
-				}
-			case strings.HasPrefix(name, "keep-sa-") && strings.HasSuffix(name, ".json"):
-				enc := strings.TrimSuffix(strings.TrimPrefix(name, "keep-sa-"), ".json")
-				if b, err := base64.RawURLEncoding.DecodeString(enc); err == nil {
-					email = strings.TrimSpace(string(b))
-				} else {
-					// Legacy (pre-safe-filename) format stored the raw email in the filename.
-					email = strings.TrimSpace(enc)
-				}
-			default:
-				continue
-			}
-
-			email = strings.ToLower(strings.TrimSpace(email))
-			if email == "" {
-				continue
-			}
-			if _, ok := seen[email]; ok {
-				continue
-			}
-			seen[email] = struct{}{}
-			out = append(out, email)
-		}
-	}
-
-	sort.Strings(out)
-
-	return out, nil
+	return layout.ListServiceAccountEmails()
 }
 
 func EnsureGmailWatchDir() (string, error) {
