@@ -65,17 +65,25 @@ func (p *CellPlanner) Plan(input CellInput) TextPlan {
 func PlanWholeCellReplacement(input CellInput, replacement string) TextPlan {
 	cellText := strings.TrimRight(input.Text, "\n")
 	expanded := strings.ReplaceAll(strings.ReplaceAll(replacement, "$$", "$"), "${0}", cellText)
-	markdown := ParseMarkdownReplacement(expanded)
-
 	deleteEnd := input.TextEndIndex
 	if strings.HasSuffix(input.Text, "\n") && deleteEnd > input.TextStartIndex {
 		deleteEnd--
 	}
+	return planCellText(input.TextStartIndex, deleteEnd, expanded)
+}
+
+// PlanCellInsertion inserts literal Markdown cell content at one document index.
+func PlanCellInsertion(index int64, content string) TextPlan {
+	return planCellText(index, index, content)
+}
+
+func planCellText(startIndex, endIndex int64, content string) TextPlan {
+	markdown := ParseMarkdownReplacement(content)
 	plan := TextPlan{
 		MatchCount: 1,
 		TextEdits: []TextEdit{{
-			StartIndex: input.TextStartIndex,
-			EndIndex:   deleteEnd,
+			StartIndex: startIndex,
+			EndIndex:   endIndex,
 			InsertText: markdown.Text,
 		}},
 	}
@@ -83,11 +91,11 @@ func PlanWholeCellReplacement(input CellInput, replacement string) TextPlan {
 		return plan
 	}
 
-	end := input.TextStartIndex + utf16Length(markdown.Text)
+	end := startIndex + utf16Length(markdown.Text)
 	plan.Formatting = []FormatIntent{{
-		StartIndex:           input.TextStartIndex,
+		StartIndex:           startIndex,
 		EndIndex:             end,
-		StructuralStartIndex: input.TextStartIndex,
+		StructuralStartIndex: startIndex,
 		StructuralEndIndex:   end,
 		Formats:              append([]string(nil), markdown.Formats...),
 		LeadingTab:           strings.HasPrefix(markdown.Text, "\t"),

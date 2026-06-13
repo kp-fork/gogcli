@@ -283,6 +283,114 @@ func TestProcessCellExprsRefetchesBeforeRepeatedCell(t *testing.T) {
 	}
 }
 
+func TestRunTableCreateUsesUTF16PlaceholderRange(t *testing.T) {
+	document := &docs.Document{
+		DocumentId: "test-doc-id",
+		Body: &docs.Body{Content: []*docs.StructuralElement{{
+			StartIndex: 5,
+			EndIndex:   13,
+			Paragraph: &docs.Paragraph{Elements: []*docs.ParagraphElement{{
+				StartIndex: 5,
+				EndIndex:   13,
+				TextRun:    &docs.TextRun{Content: "😀 SLOT\n"},
+			}}},
+		}}},
+	}
+	var captured []*docs.Request
+	server := mockDocsServerAdvanced(t, document, func(requests []*docs.Request) {
+		captured = append(captured, requests...)
+	})
+	defer server.Close()
+	service, err := docs.NewService(
+		context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(server.Client()),
+		option.WithEndpoint(server.URL+"/"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = (&DocsSedCmd{}).runTableCreate(
+		mockDocsContext(t, service),
+		sedTestUI(),
+		"",
+		document.DocumentId,
+		sedExpr{pattern: "SLOT", replacement: "|2x3|"},
+		&tableCreateSpec{rows: 2, cols: 3},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(captured) != 2 {
+		t.Fatalf("requests = %#v", captured)
+	}
+	deletion := captured[0].DeleteContentRange
+	insertion := captured[1].InsertTable
+	if deletion == nil || deletion.Range.StartIndex != 8 || deletion.Range.EndIndex != 12 {
+		t.Fatalf("deletion = %#v", deletion)
+	}
+	if insertion == nil || insertion.Location.Index != 8 || insertion.Rows != 2 || insertion.Columns != 3 {
+		t.Fatalf("insertion = %#v", insertion)
+	}
+}
+
+func TestRunTableCreateRejectsPatternBeforeFetch(t *testing.T) {
+	err := (&DocsSedCmd{}).runTableCreate(
+		context.Background(),
+		sedTestUI(),
+		"",
+		"test-doc-id",
+		sedExpr{pattern: "["},
+		&tableCreateSpec{rows: 1, cols: 1},
+	)
+	if err == nil || !strings.Contains(err.Error(), "compile pattern") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestFillTableCellsUsesSharedMarkdownPlan(t *testing.T) {
+	document := tableCellDocument([]*docs.TableCell{
+		indexedTableCell("\n", 10, 11),
+	})
+	var captured []*docs.Request
+	server := mockDocsServerAdvanced(t, document, func(requests []*docs.Request) {
+		captured = append(captured, requests...)
+	})
+	defer server.Close()
+	service, err := docs.NewService(
+		context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(server.Client()),
+		option.WithEndpoint(server.URL+"/"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = (&DocsSedCmd{}).fillTableCells(
+		context.Background(),
+		service,
+		document.DocumentId,
+		1,
+		&tableCreateSpec{rows: 1, cols: 1, cells: [][]string{{"**A😀**"}}},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(captured) != 2 {
+		t.Fatalf("requests = %#v", captured)
+	}
+	insertion := captured[0].InsertText
+	formatting := captured[1].UpdateTextStyle
+	if insertion == nil || insertion.Location.Index != 10 || insertion.Text != "A😀" {
+		t.Fatalf("insertion = %#v", insertion)
+	}
+	if formatting == nil || formatting.Range.StartIndex != 10 || formatting.Range.EndIndex != 13 {
+		t.Fatalf("formatting = %#v", formatting)
+	}
+}
+
 func tableCellDocument(cells []*docs.TableCell) *docs.Document {
 	return &docs.Document{
 		DocumentId: "test-doc-id",

@@ -46,6 +46,19 @@ func TestPlanWholeCellReplacementExpandsWholeCellAndLiteralDollar(t *testing.T) 
 	}
 }
 
+func TestPlanCellInsertionKeepsSedBackreferenceSyntaxLiteral(t *testing.T) {
+	t.Parallel()
+	plan := PlanCellInsertion(7, "**${0} $$**")
+	if len(plan.TextEdits) != 1 || plan.TextEdits[0].StartIndex != 7 ||
+		plan.TextEdits[0].EndIndex != 7 ||
+		plan.TextEdits[0].InsertText != "${0} $$" {
+		t.Fatalf("text edits = %#v", plan.TextEdits)
+	}
+	if len(plan.Formatting) != 1 || !reflect.DeepEqual(plan.Formatting[0].Formats, []string{"bold"}) {
+		t.Fatalf("formatting = %#v", plan.Formatting)
+	}
+}
+
 func TestPlanCellReplacementUsesUTF16CapturesAndGlobalSelection(t *testing.T) {
 	t.Parallel()
 	plan, err := PlanCellReplacement(CellInput{

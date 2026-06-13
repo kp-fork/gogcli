@@ -89,17 +89,10 @@ func (c *DocsSedCmd) fillTableCells(ctx context.Context, docsSvc *docs.Service, 
 			// For an empty cell, the paragraph occupies [startIndex, startIndex+1] with just a \n.
 			// We insert at startIndex to place text before the trailing newline.
 			insertIdx := cell.Content[0].StartIndex
-
-			plainText, formats := parseMarkdownReplacement(cellText)
-
-			fillRequests = append(fillRequests, &docs.Request{
-				InsertText: &docs.InsertTextRequest{
-					Location: &docs.Location{Index: insertIdx},
-					Text:     plainText,
-				},
-			})
-
-			fillRequests = append(fillRequests, buildTextStyleRequests(formats, insertIdx, insertIdx+utf16Len(plainText))...)
+			fillRequests = append(
+				fillRequests,
+				buildCellPlanRequests(docssed.PlanCellInsertion(insertIdx, cellText))...,
+			)
 		}
 	}
 
@@ -118,9 +111,17 @@ func (c *DocsSedCmd) fillTableCells(ctx context.Context, docsSvc *docs.Service, 
 }
 
 func (c *DocsSedCmd) runTableCreate(ctx context.Context, u *ui.UI, account, id string, expr sedExpr, spec *tableCreateSpec) error {
-	re, err := expr.compilePattern()
+	planner, err := docssed.NewTableCreatePlanner(
+		semanticExpressionFromSedExpr(expr),
+		docssed.TableCreateSpec{
+			Rows:    spec.rows,
+			Columns: spec.cols,
+			Header:  spec.header,
+			Cells:   spec.cells,
+		},
+	)
 	if err != nil {
-		return fmt.Errorf("compile pattern: %w", err)
+		return err
 	}
 
 	docsSvc, doc, err := fetchDoc(ctx, account, id)
@@ -128,44 +129,12 @@ func (c *DocsSedCmd) runTableCreate(ctx context.Context, u *ui.UI, account, id s
 		return err
 	}
 
-	// Find the placeholder text in the document
-	var matchStart, matchEnd int64
-	found := false
-
-	var walkContent func(content []*docs.StructuralElement)
-	walkContent = func(content []*docs.StructuralElement) {
-		if found {
-			return
-		}
-		for _, elem := range content {
-			if elem.Paragraph != nil {
-				for _, pe := range elem.Paragraph.Elements {
-					if pe.TextRun != nil && pe.TextRun.Content != "" {
-						loc := re.FindStringIndex(pe.TextRun.Content)
-						if loc != nil {
-							matchStart = pe.StartIndex + int64(loc[0])
-							matchEnd = pe.StartIndex + int64(loc[1])
-							found = true
-							return
-						}
-					}
-				}
-			}
-			// Walk into table cells too
-			if elem.Table != nil {
-				for _, row := range elem.Table.TableRows {
-					for _, cell := range row.TableCells {
-						walkContent(cell.Content)
-					}
-				}
-			}
-		}
+	projection := docssed.ProjectDocument(doc)
+	var mutation *docssed.TableCreateMutation
+	if projection.Legacy != nil {
+		mutation = planner.Plan(*projection.Legacy)
 	}
-	if doc.Body != nil {
-		walkContent(doc.Body.Content)
-	}
-
-	if !found {
+	if mutation == nil {
 		return sedOutputOK(ctx, u, id, sedOutputKV{"replaced", 0}, sedOutputKV{"message", "pattern not found"})
 	}
 
@@ -176,12 +145,12 @@ func (c *DocsSedCmd) runTableCreate(ctx context.Context, u *ui.UI, account, id s
 	var requests []*docs.Request
 
 	// Delete placeholder text
-	if matchStart < matchEnd {
+	if mutation.StartIndex < mutation.EndIndex {
 		requests = append(requests, &docs.Request{
 			DeleteContentRange: &docs.DeleteContentRangeRequest{
 				Range: &docs.Range{
-					StartIndex: matchStart,
-					EndIndex:   matchEnd,
+					StartIndex: mutation.StartIndex,
+					EndIndex:   mutation.EndIndex,
 				},
 			},
 		})
@@ -190,9 +159,9 @@ func (c *DocsSedCmd) runTableCreate(ctx context.Context, u *ui.UI, account, id s
 	// Insert table at the position where placeholder was
 	requests = append(requests, &docs.Request{
 		InsertTable: &docs.InsertTableRequest{
-			Location: &docs.Location{Index: matchStart},
-			Rows:     int64(spec.rows),
-			Columns:  int64(spec.cols),
+			Location: &docs.Location{Index: mutation.StartIndex},
+			Rows:     int64(mutation.Rows),
+			Columns:  int64(mutation.Columns),
 		},
 	})
 
@@ -208,7 +177,7 @@ func (c *DocsSedCmd) runTableCreate(ctx context.Context, u *ui.UI, account, id s
 
 	// Fill cells with content if provided (pipe-table syntax)
 	if len(spec.cells) > 0 {
-		if err := c.fillTableCells(ctx, docsSvc, id, matchStart, spec); err != nil {
+		if err := c.fillTableCells(ctx, docsSvc, id, mutation.StartIndex, spec); err != nil {
 			return fmt.Errorf("fill table cells: %w", err)
 		}
 	}
