@@ -245,28 +245,41 @@ func (c *DocsWriteCmd) writePlainTextResult(ctx context.Context, resp *docs.Batc
 }
 
 func (c *DocsWriteCmd) writeMarkdown(ctx context.Context, flags *RootFlags, docID, content string) error {
-	u := ui.FromContext(ctx)
-
-	if c.Append {
-		return c.appendMarkdown(ctx, flags, docID, content)
-	}
-	if !c.Replace {
-		return usage("--markdown requires --replace or --append")
-	}
-	// Drive's markdown converter operates on entire documents, so we cannot use
-	// the Drive Files.Update path when --tab is set. Instead, render markdown
-	// locally and apply it to the specified tab via Docs batchUpdate.
-	if c.Tab != "" {
-		return c.replaceMarkdownInTab(ctx, flags, docID, content)
-	}
-
 	cleaned, images := extractMarkdownImages(content)
-	if docsmarkdown.HasTableCellBreaks(cleaned) {
-		return c.replaceMarkdownInTab(ctx, flags, docID, content)
+	plan, err := docsedit.PlanMarkdownWrite(docsedit.MarkdownWriteOptions{
+		Markdown:           cleaned,
+		ImageCount:         len(images),
+		Append:             c.Append,
+		Replace:            c.Replace,
+		Tab:                c.Tab,
+		CheckOrphans:       c.CheckOrphans,
+		ApplyDocumentStyle: c.Pageless || c.Layout.any(),
+	})
+	if err != nil {
+		return usage(err.Error())
 	}
-	cleaned = docsmarkdown.NormalizeTablesForDriveImport(cleaned)
-	explicitHeadingAnchors := docsmarkdown.ImportExplicitHeadingAnchors(cleaned)
-	cleaned = docsmarkdown.StripHeadingAnchors(cleaned)
+
+	switch plan.Mode {
+	case docsedit.MarkdownWriteDriveReplace:
+		return c.replaceMarkdownWithDrive(ctx, flags, docID, content, images, plan)
+	case docsedit.MarkdownWriteLocalAppend:
+		return c.appendMarkdown(ctx, flags, docID, content, plan)
+	case docsedit.MarkdownWriteLocalReplace:
+		return c.replaceMarkdownLocally(ctx, flags, docID, content, plan)
+	default:
+		return fmt.Errorf("unsupported markdown write mode: %d", plan.Mode)
+	}
+}
+
+func (c *DocsWriteCmd) replaceMarkdownWithDrive(
+	ctx context.Context,
+	flags *RootFlags,
+	docID string,
+	content string,
+	images []markdownImage,
+	plan docsedit.MarkdownWritePlan,
+) error {
+	u := ui.FromContext(ctx)
 	dryRunPayload := map[string]any{
 		"document_id":   docID,
 		"written":       len(content),
@@ -274,8 +287,8 @@ func (c *DocsWriteCmd) writeMarkdown(ctx context.Context, flags *RootFlags, docI
 		"replace":       true,
 		"markdown":      true,
 		"pageless":      c.Pageless,
-		"images":        len(images),
-		"check_orphans": c.CheckOrphans,
+		"images":        plan.ImageCount,
+		"check_orphans": plan.CheckOrphans,
 	}
 	for k, v := range c.Layout.dryRunPayload() {
 		dryRunPayload[k] = v
@@ -290,12 +303,20 @@ func (c *DocsWriteCmd) writeMarkdown(ctx context.Context, flags *RootFlags, docI
 	}
 
 	var docsSvc *docs.Service
-	if c.CheckOrphans {
+	if plan.CheckOrphans {
 		docsSvc, err = docsService(ctx, account)
 		if err != nil {
 			return err
 		}
-		orphans, tabID, orphanErr := findDocsWriteMarkdownOrphans(ctx, driveSvc, docsSvc, docID, content, "", true)
+		orphans, tabID, orphanErr := findDocsWriteMarkdownOrphans(
+			ctx,
+			driveSvc,
+			docsSvc,
+			docID,
+			content,
+			plan.Tab,
+			plan.OrphanScopeWholeDocument,
+		)
 		if orphanErr != nil {
 			return orphanErr
 		}
@@ -305,7 +326,7 @@ func (c *DocsWriteCmd) writeMarkdown(ctx context.Context, flags *RootFlags, docI
 	}
 
 	updated, err := driveSvc.Files.Update(docID, &drive.File{}).
-		Media(strings.NewReader(cleaned), gapi.ContentType(mimeTextMarkdown)).
+		Media(strings.NewReader(plan.Markdown), gapi.ContentType(mimeTextMarkdown)).
 		SupportsAllDrives(true).
 		Fields("id,name,webViewLink").
 		Context(ctx).
@@ -314,8 +335,7 @@ func (c *DocsWriteCmd) writeMarkdown(ctx context.Context, flags *RootFlags, docI
 		return fmt.Errorf("writing markdown to document: %w", err)
 	}
 
-	needsDocsSvc := len(images) > 0 || c.Pageless || c.Layout.any() || markdownMayContainHeadingLinks(cleaned)
-	if needsDocsSvc && docsSvc == nil {
+	if plan.RequiresDocumentsService && docsSvc == nil {
 		var svcErr error
 		docsSvc, svcErr = docsService(ctx, account)
 		if svcErr != nil {
@@ -323,20 +343,20 @@ func (c *DocsWriteCmd) writeMarkdown(ctx context.Context, flags *RootFlags, docI
 		}
 	}
 	rewrittenHeadingLinks := 0
-	if markdownMayContainHeadingLinks(cleaned) {
-		count, rewriteErr := rewriteMarkdownHeadingLinks(ctx, docsSvc, docID, "", explicitHeadingAnchors)
+	if plan.RewriteHeadingLinks {
+		count, rewriteErr := rewriteMarkdownHeadingLinks(ctx, docsSvc, docID, plan.Tab, plan.ExplicitHeadingAnchors)
 		if rewriteErr != nil {
 			return fmt.Errorf("rewrite heading links: %w", rewriteErr)
 		}
 		rewrittenHeadingLinks = count
 	}
-	if len(images) > 0 {
-		if err := insertImagesIntoDocs(ctx, docsSvc, docID, images, ""); err != nil {
-			cleanupDocsImagePlaceholders(ctx, docsSvc, docID, images, "")
+	if plan.InsertImages {
+		if err := insertImagesIntoDocs(ctx, docsSvc, docID, images, plan.Tab); err != nil {
+			cleanupDocsImagePlaceholders(ctx, docsSvc, docID, images, plan.Tab)
 			return fmt.Errorf("insert images: %w", err)
 		}
 	}
-	if c.Pageless || c.Layout.any() {
+	if plan.ApplyDocumentStyle {
 		if err := c.applyDocumentStyle(ctx, docsSvc, docID); err != nil {
 			return err
 		}
@@ -373,18 +393,22 @@ func (c *DocsWriteCmd) writeMarkdown(ctx context.Context, flags *RootFlags, docI
 	return nil
 }
 
-func (c *DocsWriteCmd) appendMarkdown(ctx context.Context, flags *RootFlags, docID, content string) error {
-	cleaned, images := extractMarkdownImages(content)
-	explicitHeadingAnchors := docsmarkdown.ExplicitHeadingAnchors(cleaned)
+func (c *DocsWriteCmd) appendMarkdown(
+	ctx context.Context,
+	flags *RootFlags,
+	docID string,
+	content string,
+	plan docsedit.MarkdownWritePlan,
+) error {
 	dryRunPayload := map[string]any{
 		"document_id": docID,
-		"written":     len(cleaned),
+		"written":     len(plan.Markdown),
 		"append":      true,
 		"replace":     false,
 		"markdown":    true,
 		"pageless":    c.Pageless,
-		"tab":         c.Tab,
-		"images":      len(images),
+		"tab":         plan.Tab,
+		"images":      plan.ImageCount,
 	}
 	for k, v := range c.Layout.dryRunPayload() {
 		dryRunPayload[k] = v
@@ -405,7 +429,7 @@ func (c *DocsWriteCmd) appendMarkdown(ctx context.Context, flags *RootFlags, doc
 	c.Tab = tabID
 	insertIndex := docsedit.AppendIndex(endIndex)
 	insertedMarkdownStart := insertIndex
-	appendElements := docsmarkdown.ParseMarkdown(cleaned)
+	appendElements := docsmarkdown.ParseMarkdown(plan.Markdown)
 	if insertIndex > 1 && markdownAppendNeedsParagraphBoundary(appendElements) {
 		insertedMarkdownStart++
 	}
@@ -417,12 +441,21 @@ func (c *DocsWriteCmd) appendMarkdown(ctx context.Context, flags *RootFlags, doc
 		}
 		return err
 	}
-	if err := c.applyDocumentStyle(ctx, svc, docID); err != nil {
-		return err
+	if plan.ApplyDocumentStyle {
+		if err := c.applyDocumentStyle(ctx, svc, docID); err != nil {
+			return err
+		}
 	}
 	rewrittenHeadingLinks := 0
-	if markdownMayContainHeadingLinks(cleaned) {
-		count, rewriteErr := rewriteMarkdownHeadingLinksFromIndex(ctx, svc, docID, c.Tab, explicitHeadingAnchors, insertedMarkdownStart)
+	if plan.RewriteHeadingLinks {
+		count, rewriteErr := rewriteMarkdownHeadingLinksFromIndex(
+			ctx,
+			svc,
+			docID,
+			c.Tab,
+			plan.ExplicitHeadingAnchors,
+			insertedMarkdownStart,
+		)
 		if rewriteErr != nil {
 			return fmt.Errorf("rewrite heading links: %w", rewriteErr)
 		}
@@ -466,24 +499,26 @@ func (c *DocsWriteCmd) appendMarkdown(ctx context.Context, flags *RootFlags, doc
 	return nil
 }
 
-// replaceMarkdownInTab implements --replace --markdown --tab=<tab>. Drive's
-// markdown converter is whole-document-only, so per-tab whole-tab re-render
-// is achieved at the gogcli layer: render markdown locally with the same
-// Docs API path used by --append --markdown, after wiping the tab's existing
-// body content via DeleteContentRange. Other tabs are untouched.
-func (c *DocsWriteCmd) replaceMarkdownInTab(ctx context.Context, flags *RootFlags, docID, content string) error {
-	cleaned, images := extractMarkdownImages(content)
-	explicitHeadingAnchors := docsmarkdown.ExplicitHeadingAnchors(cleaned)
+// replaceMarkdownLocally renders Markdown through Docs batchUpdate after
+// clearing the selected body. This preserves tab targeting and table-cell
+// line breaks that Drive's whole-document converter cannot represent.
+func (c *DocsWriteCmd) replaceMarkdownLocally(
+	ctx context.Context,
+	flags *RootFlags,
+	docID string,
+	content string,
+	plan docsedit.MarkdownWritePlan,
+) error {
 	dryRunPayload := map[string]any{
 		"document_id":   docID,
-		"written":       len(cleaned),
+		"written":       len(plan.Markdown),
 		"append":        false,
 		"replace":       true,
 		"markdown":      true,
 		"pageless":      c.Pageless,
-		"tab":           c.Tab,
-		"images":        len(images),
-		"check_orphans": c.CheckOrphans,
+		"tab":           plan.Tab,
+		"images":        plan.ImageCount,
+		"check_orphans": plan.CheckOrphans,
 	}
 	for k, v := range c.Layout.dryRunPayload() {
 		dryRunPayload[k] = v
@@ -494,7 +529,7 @@ func (c *DocsWriteCmd) replaceMarkdownInTab(ctx context.Context, flags *RootFlag
 
 	var svc *docs.Service
 	var err error
-	if c.CheckOrphans {
+	if plan.CheckOrphans {
 		account, driveSvc, driveErr := requireDriveService(ctx, flags)
 		if driveErr != nil {
 			return driveErr
@@ -503,7 +538,15 @@ func (c *DocsWriteCmd) replaceMarkdownInTab(ctx context.Context, flags *RootFlag
 		if err != nil {
 			return err
 		}
-		orphans, resolvedTabID, orphanErr := findDocsWriteMarkdownOrphans(ctx, driveSvc, svc, docID, content, c.Tab, false)
+		orphans, resolvedTabID, orphanErr := findDocsWriteMarkdownOrphans(
+			ctx,
+			driveSvc,
+			svc,
+			docID,
+			content,
+			plan.Tab,
+			plan.OrphanScopeWholeDocument,
+		)
 		if orphanErr != nil {
 			return orphanErr
 		}
@@ -550,12 +593,14 @@ func (c *DocsWriteCmd) replaceMarkdownInTab(ctx context.Context, flags *RootFlag
 		}
 		return err
 	}
-	if err := c.applyDocumentStyle(ctx, svc, docID); err != nil {
-		return err
+	if plan.ApplyDocumentStyle {
+		if err := c.applyDocumentStyle(ctx, svc, docID); err != nil {
+			return err
+		}
 	}
 	rewrittenHeadingLinks := 0
-	if markdownMayContainHeadingLinks(cleaned) {
-		count, rewriteErr := rewriteMarkdownHeadingLinks(ctx, svc, docID, tabID, explicitHeadingAnchors)
+	if plan.RewriteHeadingLinks {
+		count, rewriteErr := rewriteMarkdownHeadingLinks(ctx, svc, docID, tabID, plan.ExplicitHeadingAnchors)
 		if rewriteErr != nil {
 			return fmt.Errorf("rewrite heading links: %w", rewriteErr)
 		}
