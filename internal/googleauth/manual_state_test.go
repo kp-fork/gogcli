@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -288,7 +289,7 @@ func TestManualStateStoreSaveUsesPrivateModes(t *testing.T) {
 		t.Fatalf("stat state dir: %v", err)
 	}
 
-	if got := dirInfo.Mode().Perm(); got != 0o700 {
+	if got := dirInfo.Mode().Perm(); runtime.GOOS != "windows" && got != 0o700 {
 		t.Fatalf("state dir mode = %o, want 700", got)
 	}
 
@@ -302,7 +303,7 @@ func TestManualStateStoreSaveUsesPrivateModes(t *testing.T) {
 		t.Fatalf("stat state file: %v", err)
 	}
 
-	if got := fileInfo.Mode().Perm(); got != 0o600 {
+	if got := fileInfo.Mode().Perm(); runtime.GOOS != "windows" && got != 0o600 {
 		t.Fatalf("state file mode = %o, want 600", got)
 	}
 }
