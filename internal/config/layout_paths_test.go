@@ -1,6 +1,7 @@
 package config
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -9,6 +10,7 @@ func TestLayoutDerivedPaths(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
+
 	layout := Layout{
 		ConfigDir: filepath.Join(root, "config"),
 		DataDir:   filepath.Join(root, "data"),
@@ -45,6 +47,29 @@ func TestLayoutDerivedPaths(t *testing.T) {
 				t.Fatalf("got %q, want %q", test.got, test.want)
 			}
 		})
+	}
+}
+
+func TestLayoutKeyringDirPrefersLegacyUnlessDataIsExplicit(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+
+	layout := Layout{
+		ConfigDir: filepath.Join(root, "config"),
+		DataDir:   filepath.Join(root, "data"),
+	}
+	if err := os.MkdirAll(layout.LegacyKeyringDir(), 0o700); err != nil {
+		t.Fatalf("mkdir legacy keyring: %v", err)
+	}
+
+	if got := layout.KeyringDir(); got != layout.LegacyKeyringDir() {
+		t.Fatalf("KeyringDir() = %q, want legacy %q", got, layout.LegacyKeyringDir())
+	}
+
+	layout.ExplicitData = true
+	if got := layout.KeyringDir(); got != layout.PrimaryKeyringDir() {
+		t.Fatalf("KeyringDir() = %q, want primary %q", got, layout.PrimaryKeyringDir())
 	}
 }
 

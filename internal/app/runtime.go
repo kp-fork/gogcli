@@ -136,11 +136,12 @@ type AuthOperations struct {
 }
 
 type Runtime struct {
-	IO       IO
-	Services Services
-	Auth     AuthOperations
-	Layout   config.Layout
-	Config   *config.ConfigStore
+	IO            IO
+	Services      Services
+	Auth          AuthOperations
+	Layout        config.Layout
+	Config        *config.ConfigStore
+	ConfigManaged bool
 }
 
 type runtimeContextKey struct{}

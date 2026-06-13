@@ -126,40 +126,21 @@ func EnsureBatchDir() (string, error) {
 // We keep this separate from the main config dir because the file backend creates
 // one file per key.
 func KeyringDir() (string, error) {
-	layout, err := currentLayoutFor(PathKindData)
+	layout, err := currentLayoutFor(PathKindConfig, PathKindData)
 	if err != nil {
 		return "", err
 	}
 
-	primary := layout.PrimaryKeyringDir()
-	if layout.ExplicitData {
-		return primary, nil
-	}
-
-	legacyLayout, err := currentLayoutFor(PathKindConfig)
-	if err != nil {
-		return "", err
-	}
-	legacy := legacyLayout.LegacyKeyringDir()
-	if st, legacyErr := os.Stat(legacy); legacyErr == nil && st.IsDir() {
-		return legacy, nil
-	}
-
-	return primary, nil
+	return layout.KeyringDir(), nil
 }
 
 func EnsureKeyringDir() (string, error) {
-	dir, err := KeyringDir()
+	layout, err := currentLayoutFor(PathKindConfig, PathKindData)
 	if err != nil {
 		return "", err
 	}
-	// keyring's file backend uses 0700 by default; match that.
 
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return "", fmt.Errorf("ensure keyring dir: %w", err)
-	}
-
-	return dir, nil
+	return layout.EnsureKeyringDir()
 }
 
 func ClientCredentialsPath() (string, error) {

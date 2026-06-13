@@ -25,6 +25,7 @@ var (
 	errNoTTY                 = errors.New("no TTY available for keyring file backend password prompt")
 	errInvalidKeyringBackend = errors.New("invalid keyring backend")
 	errKeyringTimeout        = errors.New("keyring connection timed out")
+	errNilConfigStore        = errors.New("config store is nil")
 	openKeyringFunc          = openKeyring
 	keyringOpenFunc          = keyring.Open
 )
@@ -42,11 +43,24 @@ const (
 )
 
 func ResolveKeyringBackendInfo() (KeyringBackendInfo, error) {
+	store, err := config.DefaultConfigStore()
+	if err != nil {
+		return KeyringBackendInfo{}, fmt.Errorf("resolve keyring backend: %w", err)
+	}
+
+	return ResolveKeyringBackendInfoFor(store)
+}
+
+func ResolveKeyringBackendInfoFor(store *config.ConfigStore) (KeyringBackendInfo, error) {
 	if v := normalizeKeyringBackend(os.Getenv(keyringBackendEnv)); v != "" {
 		return KeyringBackendInfo{Value: v, Source: keyringBackendSourceEnv}, nil
 	}
 
-	cfg, err := config.ReadConfig()
+	if store == nil {
+		return KeyringBackendInfo{}, errNilConfigStore
+	}
+
+	cfg, err := store.Read()
 	if err != nil {
 		return KeyringBackendInfo{}, fmt.Errorf("resolve keyring backend: %w", err)
 	}
@@ -163,15 +177,26 @@ func isFileKeyring(ring keyring.Keyring) bool {
 }
 
 func openKeyring() (keyring.Keyring, error) {
+	layout, err := config.ResolveSystemLayoutFor("", config.PathKindConfig, config.PathKindData)
+	if err != nil {
+		return nil, fmt.Errorf("resolve keyring layout: %w", err)
+	}
+
+	store := config.NewConfigStore(layout)
+
+	return openKeyringWithConfig(layout, store)
+}
+
+func openKeyringWithConfig(layout config.Layout, store *config.ConfigStore) (keyring.Keyring, error) {
 	// On Linux/WSL/containers, OS keychains (secret-service/kwallet) may be unavailable.
 	// In that case github.com/99designs/keyring falls back to the "file" backend,
 	// which *requires* both a directory and a password prompt function.
-	keyringDir, err := config.EnsureKeyringDir()
+	keyringDir, err := layout.EnsureKeyringDir()
 	if err != nil {
 		return nil, fmt.Errorf("ensure keyring dir: %w", err)
 	}
 
-	backendInfo, err := ResolveKeyringBackendInfo()
+	backendInfo, err := ResolveKeyringBackendInfoFor(store)
 	if err != nil {
 		return nil, err
 	}
@@ -274,12 +299,30 @@ func openKeyringWithTimeoutFunc(cfg keyring.Config, timeout time.Duration, open 
 }
 
 func OpenDefault() (Store, error) {
+	return openDefaultRepository()
+}
+
+func openDefaultRepository() (Repository, error) {
 	ring, err := openKeyringFunc()
 	if err != nil {
 		return nil, err
 	}
 
 	lock, _, err := keyringLockForRing(ring)
+	if err != nil {
+		return nil, err
+	}
+
+	return &KeyringStore{ring: ring, lock: lock}, nil
+}
+
+func OpenWithConfig(layout config.Layout, store *config.ConfigStore) (Repository, error) {
+	ring, err := openKeyringWithConfig(layout, store)
+	if err != nil {
+		return nil, err
+	}
+
+	lock, _, err := keyringLockForRingInDir(ring, layout.KeyringDir())
 	if err != nil {
 		return nil, err
 	}

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/steipete/gogcli/internal/app"
 	"github.com/steipete/gogcli/internal/config"
 	"github.com/steipete/gogcli/internal/outfmt"
 	"github.com/steipete/gogcli/internal/secrets"
@@ -79,6 +80,35 @@ func TestAuthKeyring_WritesConfig_Shorthand(t *testing.T) {
 	}
 	if cfg.KeyringBackend != "file" {
 		t.Fatalf("expected file, got %q", cfg.KeyringBackend)
+	}
+}
+
+func TestAuthKeyringWritesInjectedConfigStore(t *testing.T) {
+	t.Setenv("GOG_KEYRING_BACKEND", "")
+
+	root := t.TempDir()
+	layout := config.Layout{ConfigDir: filepath.Join(root, "config")}
+	store := config.NewConfigStore(layout)
+
+	var stdout, stderr bytes.Buffer
+	u, err := ui.New(ui.Options{Stdout: &stdout, Stderr: &stderr, Color: "never"})
+	if err != nil {
+		t.Fatalf("ui new: %v", err)
+	}
+	ctx := ui.WithUI(context.Background(), u)
+	ctx = outfmt.WithMode(ctx, outfmt.Mode{})
+	ctx = app.WithRuntime(ctx, &app.Runtime{Layout: layout, Config: store})
+
+	if err = runKong(t, &AuthKeyringCmd{}, []string{"file"}, ctx, nil); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	cfg, err := store.Read()
+	if err != nil {
+		t.Fatalf("read injected config: %v", err)
+	}
+	if cfg.KeyringBackend != "file" {
+		t.Fatalf("keyring backend = %q, want file", cfg.KeyringBackend)
 	}
 }
 

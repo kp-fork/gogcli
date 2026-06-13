@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/base64"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -21,6 +22,29 @@ func (l Layout) PrimaryKeyringDir() string {
 
 func (l Layout) LegacyKeyringDir() string {
 	return filepath.Join(l.ConfigDir, "keyring")
+}
+
+func (l Layout) KeyringDir() string {
+	primary := l.PrimaryKeyringDir()
+	if l.ExplicitData {
+		return primary
+	}
+
+	legacy := l.LegacyKeyringDir()
+	if st, err := os.Stat(legacy); err == nil && st.IsDir() {
+		return legacy
+	}
+
+	return primary
+}
+
+func (l Layout) EnsureKeyringDir() (string, error) {
+	dir := l.KeyringDir()
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", fmt.Errorf("ensure keyring dir: %w", err)
+	}
+
+	return dir, nil
 }
 
 func (l Layout) ClientCredentialsPathFor(client string) (string, error) {

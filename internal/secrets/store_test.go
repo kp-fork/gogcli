@@ -128,6 +128,26 @@ func TestResolveKeyringBackendInfo_EnvOverridesConfig(t *testing.T) {
 	}
 }
 
+func TestResolveKeyringBackendInfoForUsesInjectedStore(t *testing.T) {
+	t.Setenv("GOG_KEYRING_BACKEND", "")
+
+	layout := config.Layout{ConfigDir: t.TempDir()}
+
+	store := config.NewConfigStore(layout)
+	if err := store.Write(config.File{KeyringBackend: "file"}); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	info, err := ResolveKeyringBackendInfoFor(store)
+	if err != nil {
+		t.Fatalf("ResolveKeyringBackendInfoFor: %v", err)
+	}
+
+	if info.Value != "file" || info.Source != keyringBackendSourceConfig {
+		t.Fatalf("backend info = %#v, want file/config", info)
+	}
+}
+
 func TestAllowedBackends_Invalid(t *testing.T) {
 	_, err := allowedBackends(KeyringBackendInfo{Value: "nope"})
 	if err == nil {

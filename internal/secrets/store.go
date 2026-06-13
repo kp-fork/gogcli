@@ -21,6 +21,17 @@ type Store interface {
 	SetDefaultAccount(client string, email string) error
 }
 
+type SecretStore interface {
+	SetSecret(key string, value []byte) error
+	GetSecret(key string) ([]byte, error)
+	DeleteSecret(key string) error
+}
+
+type Repository interface {
+	Store
+	SecretStore
+}
+
 type KeyringStore struct {
 	ring keyring.Keyring
 	lock *keyringLock

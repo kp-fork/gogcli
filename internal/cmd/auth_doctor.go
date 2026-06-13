@@ -46,11 +46,12 @@ func (c *AuthDoctorCmd) Run(ctx context.Context, _ *RootFlags) error {
 		})
 	}
 
-	configPath, pathErr := config.ConfigPath()
-	if pathErr != nil {
-		add("config.path", doctorError, pathErr.Error(), "")
+	configStore, configErr := commandConfigStore(ctx)
+	if configErr != nil {
+		add("config.path", doctorError, configErr.Error(), "")
 	} else {
-		exists, existsErr := config.ConfigExists()
+		configPath := configStore.Path()
+		exists, existsErr := configStore.Exists()
 		switch {
 		case existsErr != nil:
 			add("config.path", doctorError, existsErr.Error(), "")
@@ -61,7 +62,7 @@ func (c *AuthDoctorCmd) Run(ctx context.Context, _ *RootFlags) error {
 		}
 	}
 
-	backendInfo, backendErr := secrets.ResolveKeyringBackendInfo()
+	backendInfo, backendErr := resolveKeyringBackendInfo(ctx)
 	if backendErr != nil {
 		add("keyring.backend", doctorError, backendErr.Error(), "")
 	} else {
@@ -137,7 +138,15 @@ func authDoctorTokenCheckName(prefix string, client string, email string) string
 }
 
 func addKeyringEnvChecks(ctx context.Context, add func(string, string, string, string), backendInfo secrets.KeyringBackendInfo) {
-	cfg, cfgErr := config.ReadConfig()
+	store, storeErr := commandConfigStore(ctx)
+	if storeErr != nil {
+		add("keyring.config", doctorError, storeErr.Error(), "")
+	}
+
+	cfg, cfgErr := config.File{}, storeErr
+	if storeErr == nil {
+		cfg, cfgErr = store.Read()
+	}
 	if cfgErr != nil {
 		add("keyring.config", doctorError, cfgErr.Error(), "")
 	}
@@ -147,7 +156,11 @@ func addKeyringEnvChecks(ctx context.Context, add func(string, string, string, s
 		add("keyring.backend_override", doctorWarn, "GOG_KEYRING_BACKEND overrides config.json keyring_backend", "make env and config agree before debugging stored tokens")
 	}
 
-	keyringDir, dirErr := config.KeyringDir()
+	layout, layoutErr := commandLayout(ctx, config.PathKindConfig, config.PathKindData)
+	keyringDir, dirErr := "", layoutErr
+	if layoutErr == nil {
+		keyringDir = layout.KeyringDir()
+	}
 	if dirErr != nil {
 		add("keyring.dir", doctorError, dirErr.Error(), "")
 	} else {

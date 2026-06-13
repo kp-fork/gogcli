@@ -34,6 +34,14 @@ func NewConfigStore(layout Layout) *ConfigStore {
 	return &ConfigStore{layout: layout}
 }
 
+func (s *ConfigStore) Layout() Layout {
+	if s == nil {
+		return Layout{}
+	}
+
+	return s.layout
+}
+
 func ConfigPath() (string, error) {
 	store, err := defaultConfigStore()
 	if err != nil {

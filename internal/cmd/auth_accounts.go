@@ -11,7 +11,6 @@ import (
 	"github.com/steipete/gogcli/internal/authclient"
 	"github.com/steipete/gogcli/internal/config"
 	"github.com/steipete/gogcli/internal/googleauth"
-	"github.com/steipete/gogcli/internal/oauthclient"
 	"github.com/steipete/gogcli/internal/outfmt"
 	"github.com/steipete/gogcli/internal/secrets"
 	"github.com/steipete/gogcli/internal/ui"
@@ -26,15 +25,16 @@ type AuthStatusCmd struct{}
 
 func (c *AuthStatusCmd) Run(ctx context.Context, flags *RootFlags) error {
 	u := ui.FromContext(ctx)
-	configPath, err := config.ConfigPath()
+	configStore, err := commandConfigStore(ctx)
 	if err != nil {
 		return err
 	}
-	configExists, err := config.ConfigExists()
+	configPath := configStore.Path()
+	configExists, err := configStore.Exists()
 	if err != nil {
 		return err
 	}
-	backendInfo, err := secrets.ResolveKeyringBackendInfo()
+	backendInfo, err := secrets.ResolveKeyringBackendInfoFor(configStore)
 	if err != nil {
 		return err
 	}
@@ -56,12 +56,15 @@ func (c *AuthStatusCmd) Run(ctx context.Context, flags *RootFlags) error {
 				return resolveErr
 			}
 			client = resolvedClient
-			path, exists, pathErr := config.ExistingClientCredentialsPathFor(client)
-			if pathErr == nil {
-				credentialsPath = path
-				credentialsExists = exists
+			credentialFiles, filesErr := commandClientCredentialsStore(ctx)
+			if filesErr == nil {
+				path, exists, pathErr := credentialFiles.ExistingPath(client)
+				if pathErr == nil {
+					credentialsPath = path
+					credentialsExists = exists
+				}
 			}
-			clientSecretInKeyring = oauthclient.ClientSecretInKeyring(client)
+			clientSecretInKeyring = commandClientSecretInKeyring(ctx, client)
 			if p, _, ok := bestServiceAccountPathAndMtime(normalizeEmail(account)); ok {
 				serviceAccountConfigured = true
 				serviceAccountPath = p
@@ -226,13 +229,17 @@ func (c *AuthRemoveCmd) Run(ctx context.Context, flags *RootFlags) error {
 	if err != nil {
 		return err
 	}
-	if err := store.DeleteToken(client, email); err != nil {
-		return err
+	if deleteErr := store.DeleteToken(client, email); deleteErr != nil {
+		return deleteErr
 	}
 
 	// Clean up config.json: remove aliases pointing to this email and the
 	// account-client entry for this email.
-	if updateErr := config.UpdateConfig(func(cfg *config.File) error {
+	configStore, err := commandConfigStore(ctx)
+	if err != nil {
+		return err
+	}
+	if updateErr := configStore.Update(func(cfg *config.File) error {
 		for alias, target := range cfg.AccountAliases {
 			if strings.EqualFold(target, email) {
 				delete(cfg.AccountAliases, alias)

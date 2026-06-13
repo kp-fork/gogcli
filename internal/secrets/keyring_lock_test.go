@@ -13,8 +13,30 @@ import (
 	"testing"
 	"time"
 
+	"github.com/99designs/keyring"
+
 	"github.com/steipete/gogcli/internal/config"
 )
+
+func TestKeyringLockForRingInDirUsesInjectedDirectory(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	ring := newFileSafeKeyring(keyring.NewArrayKeyring(nil))
+
+	lock, ok, err := keyringLockForRingInDir(ring, dir)
+	if err != nil {
+		t.Fatalf("keyringLockForRingInDir: %v", err)
+	}
+
+	if !ok || lock == nil {
+		t.Fatal("expected file-backed keyring lock")
+	}
+
+	if want := filepath.Join(dir, keyringLockFilename); lock.path != want {
+		t.Fatalf("lock path = %q, want %q", lock.path, want)
+	}
+}
 
 func TestKeyringLockBlocksConcurrentProcess(t *testing.T) {
 	if os.Getenv("GOG_TEST_HOLD_KEYRING_LOCK") == "1" {

@@ -136,57 +136,21 @@ func WriteClientCredentials(c ClientCredentials) error {
 }
 
 func WriteClientCredentialsFor(client string, c ClientCredentials) error {
-	_, err := EnsureDataDir()
+	store, err := DefaultClientCredentialsStore()
 	if err != nil {
-		return fmt.Errorf("ensure data dir: %w", err)
+		return err
 	}
 
-	path, err := ClientCredentialsPathFor(client)
-	if err != nil {
-		return fmt.Errorf("resolve credentials path: %w", err)
-	}
-
-	b, err := json.MarshalIndent(c, "", "  ") //nolint:gosec // required OAuth client credentials payload
-	if err != nil {
-		return fmt.Errorf("encode credentials json: %w", err)
-	}
-
-	b = append(b, '\n')
-
-	if err := WriteFileAtomic(path, b, 0o600); err != nil {
-		return fmt.Errorf("write credentials: %w", err)
-	}
-
-	return nil
+	return store.Write(client, c)
 }
 
 func WriteClientCredentialsMetadataFor(client string, c ClientCredentials) error {
-	_, err := EnsureDataDir()
+	store, err := DefaultClientCredentialsStore()
 	if err != nil {
-		return fmt.Errorf("ensure data dir: %w", err)
+		return err
 	}
 
-	path, err := ClientCredentialsPathFor(client)
-	if err != nil {
-		return fmt.Errorf("resolve credentials path: %w", err)
-	}
-
-	metadata := struct {
-		ClientID string `json:"client_id"`
-	}{
-		ClientID: c.ClientID,
-	}
-	b, err := json.MarshalIndent(metadata, "", "  ")
-	if err != nil {
-		return fmt.Errorf("encode credentials metadata: %w", err)
-	}
-	b = append(b, '\n')
-
-	if err := WriteFileAtomic(path, b, 0o600); err != nil {
-		return fmt.Errorf("write credentials metadata: %w", err)
-	}
-
-	return nil
+	return store.WriteMetadata(client, c)
 }
 
 func ReadClientCredentials() (ClientCredentials, error) {
@@ -194,123 +158,49 @@ func ReadClientCredentials() (ClientCredentials, error) {
 }
 
 func ReadClientCredentialsFor(client string) (ClientCredentials, error) {
-	c, err := ReadClientCredentialsMetadataFor(client)
+	store, err := DefaultClientCredentialsStore()
 	if err != nil {
 		return ClientCredentials{}, err
 	}
-	if c.ClientSecret == "" {
-		return ClientCredentials{}, errMissingClientID
-	}
-	return c, nil
+
+	return store.Read(client)
 }
 
 func ReadClientCredentialsMetadataFor(client string) (ClientCredentials, error) {
-	path, err := ClientCredentialsPathFor(client)
+	store, err := DefaultClientCredentialsStore()
 	if err != nil {
-		return ClientCredentials{}, fmt.Errorf("resolve credentials path: %w", err)
-	}
-	var b []byte
-
-	if b, err = os.ReadFile(path); err != nil { //nolint:gosec // user-provided path
-		if os.IsNotExist(err) {
-			if !HasExplicitDataOverride() {
-				legacyPath, legacyErr := LegacyClientCredentialsPathFor(client)
-				if legacyErr != nil {
-					return ClientCredentials{}, fmt.Errorf("resolve legacy credentials path: %w", legacyErr)
-				}
-				if b, err = os.ReadFile(legacyPath); err == nil { //nolint:gosec // legacy path derived from user config dir
-					// Continue with the legacy bytes; next write goes to the primary data path.
-				} else if os.IsNotExist(err) {
-					return ClientCredentials{}, &CredentialsMissingError{Path: path, Cause: err}
-				}
-			} else {
-				return ClientCredentials{}, &CredentialsMissingError{Path: path, Cause: err}
-			}
-		}
-		if err != nil {
-			return ClientCredentials{}, fmt.Errorf("read credentials: %w", err)
-		}
+		return ClientCredentials{}, err
 	}
 
-	var c ClientCredentials
-	if err := json.Unmarshal(b, &c); err != nil {
-		return ClientCredentials{}, fmt.Errorf("decode credentials: %w", err)
-	}
-
-	if c.ClientID == "" {
-		return ClientCredentials{}, errMissingClientID
-	}
-
-	return c, nil
+	return store.ReadMetadata(client)
 }
 
 func DeleteClientCredentialsFor(client string) error {
-	path, err := ClientCredentialsPathFor(client)
+	store, err := DefaultClientCredentialsStore()
 	if err != nil {
-		return fmt.Errorf("resolve credentials path: %w", err)
+		return err
 	}
 
-	removed := false
-	candidates := []string{path}
-	if !HasExplicitDataOverride() {
-		legacyPath, legacyErr := LegacyClientCredentialsPathFor(client)
-		if legacyErr != nil {
-			return fmt.Errorf("resolve legacy credentials path: %w", legacyErr)
-		}
-		candidates = append(candidates, legacyPath)
-	}
-	for _, candidate := range uniquePaths(candidates...) {
-		if err := os.Remove(candidate); err != nil {
-			if os.IsNotExist(err) {
-				continue
-			}
-
-			return fmt.Errorf("delete credentials: %w", err)
-		}
-		removed = true
-	}
-	if !removed {
-		return &CredentialsMissingError{Path: path, Cause: os.ErrNotExist}
-	}
-	return nil
+	return store.Delete(client)
 }
 
 func ClientCredentialsExists(client string) (bool, error) {
-	_, ok, err := ExistingClientCredentialsPathFor(client)
+	store, err := DefaultClientCredentialsStore()
+	if err != nil {
+		return false, err
+	}
+
+	_, ok, err := store.ExistingPath(client)
 	return ok, err
 }
 
 func ExistingClientCredentialsPathFor(client string) (string, bool, error) {
-	path, err := ClientCredentialsPathFor(client)
+	store, err := DefaultClientCredentialsStore()
 	if err != nil {
 		return "", false, err
 	}
 
-	if _, err := os.Stat(path); err != nil {
-		if os.IsNotExist(err) {
-			if HasExplicitDataOverride() {
-				return path, false, nil
-			}
-			legacyPath, legacyErr := LegacyClientCredentialsPathFor(client)
-			if legacyErr != nil {
-				return "", false, legacyErr
-			}
-			if legacyPath == path {
-				return path, false, nil
-			}
-			if _, legacyStatErr := os.Stat(legacyPath); legacyStatErr != nil {
-				if os.IsNotExist(legacyStatErr) {
-					return path, false, nil
-				}
-				return "", false, fmt.Errorf("stat legacy credentials: %w", legacyStatErr)
-			}
-			return legacyPath, true, nil
-		}
-
-		return "", false, fmt.Errorf("stat credentials: %w", err)
-	}
-
-	return path, true, nil
+	return store.ExistingPath(client)
 }
 
 type CredentialsMissingError struct {

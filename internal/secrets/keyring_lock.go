@@ -39,6 +39,18 @@ func keyringLockForRing(ring keyring.Keyring) (*keyringLock, bool, error) {
 		return nil, false, fmt.Errorf("ensure keyring lock dir: %w", err)
 	}
 
+	return keyringLockForRingInDir(ring, dir)
+}
+
+func keyringLockForRingInDir(ring keyring.Keyring, dir string) (*keyringLock, bool, error) {
+	if !isFileBackedKeyring(ring) {
+		return nil, false, nil
+	}
+
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return nil, false, fmt.Errorf("ensure keyring lock dir: %w", err)
+	}
+
 	return sharedKeyringLock(filepath.Join(dir, keyringLockFilename), keyringLockTimeout()), true, nil
 }
 
@@ -163,21 +175,4 @@ func (l *keyringLock) acquireFileLock(file *os.File, exclusive bool) error {
 
 		time.Sleep(sleep)
 	}
-}
-
-func withOptionalKeyringLock(ring keyring.Keyring, exclusive bool, fn func() error) error {
-	lock, ok, err := keyringLockForRing(ring)
-	if err != nil {
-		return err
-	}
-
-	if !ok {
-		return fn()
-	}
-
-	if exclusive {
-		return lock.withWriteLock(fn)
-	}
-
-	return lock.withReadLock(fn)
 }

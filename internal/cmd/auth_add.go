@@ -287,14 +287,18 @@ func (c *AuthAddCmd) Run(ctx context.Context, flags *RootFlags) error {
 		u.Err().Linef("Migrated auth account from %s to %s", migratedEmail, authorizedEmail)
 	}
 	if override != "" {
-		cfg, err := config.ReadConfig()
+		configStore, err := commandConfigStore(ctx)
+		if err != nil {
+			return err
+		}
+		cfg, err := configStore.Read()
 		if err != nil {
 			return err
 		}
 		if err := config.SetAccountClient(&cfg, authorizedEmail, client); err != nil {
 			return err
 		}
-		if err := config.WriteConfig(cfg); err != nil {
+		if err := configStore.Write(cfg); err != nil {
 			return err
 		}
 	}

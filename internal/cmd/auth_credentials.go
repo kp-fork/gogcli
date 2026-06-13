@@ -12,6 +12,7 @@ import (
 	"github.com/steipete/gogcli/internal/config"
 	"github.com/steipete/gogcli/internal/oauthclient"
 	"github.com/steipete/gogcli/internal/outfmt"
+	"github.com/steipete/gogcli/internal/secrets"
 	"github.com/steipete/gogcli/internal/ui"
 )
 
@@ -56,13 +57,28 @@ func (c *AuthCredentialsSetCmd) Run(ctx context.Context, _ *RootFlags) error {
 		return err
 	}
 
-	if err := oauthclient.WriteClientCredentialsFor(client, creds, c.Insecure); err != nil {
+	credentialStore, err := commandOAuthCredentialsStore(ctx)
+	if err != nil {
 		return err
 	}
+	if writeErr := credentialStore.Write(client, creds, c.Insecure); writeErr != nil {
+		return writeErr
+	}
 
-	outPath, _ := config.ClientCredentialsPathFor(client)
+	files, err := commandClientCredentialsStore(ctx)
+	if err != nil {
+		return err
+	}
+	outPath, err := files.PathFor(client)
+	if err != nil {
+		return err
+	}
 	if strings.TrimSpace(c.Domains) != "" {
-		cfg, err := config.ReadConfig()
+		configStore, err := commandConfigStore(ctx)
+		if err != nil {
+			return err
+		}
+		cfg, err := configStore.Read()
 		if err != nil {
 			return err
 		}
@@ -71,7 +87,7 @@ func (c *AuthCredentialsSetCmd) Run(ctx context.Context, _ *RootFlags) error {
 				return err
 			}
 		}
-		if err := config.WriteConfig(cfg); err != nil {
+		if err := configStore.Write(cfg); err != nil {
 			return err
 		}
 	}
@@ -93,11 +109,19 @@ type AuthCredentialsListCmd struct{}
 
 func (c *AuthCredentialsListCmd) Run(ctx context.Context, _ *RootFlags) error {
 	u := ui.FromContext(ctx)
-	cfg, err := config.ReadConfig()
+	configStore, err := commandConfigStore(ctx)
 	if err != nil {
 		return err
 	}
-	creds, err := config.ListClientCredentials()
+	cfg, err := configStore.Read()
+	if err != nil {
+		return err
+	}
+	files, err := commandClientCredentialsStore(ctx)
+	if err != nil {
+		return err
+	}
+	creds, err := files.List()
 	if err != nil {
 		return err
 	}
@@ -132,7 +156,7 @@ func (c *AuthCredentialsListCmd) Run(ctx context.Context, _ *RootFlags) error {
 			Path:                  info.Path,
 			Default:               info.Default,
 			Domains:               domains,
-			ClientSecretInKeyring: oauthclient.ClientSecretInKeyring(info.Client),
+			ClientSecretInKeyring: commandClientSecretInKeyring(ctx, info.Client),
 		})
 		seen[info.Client] = struct{}{}
 	}
@@ -222,7 +246,11 @@ func (c *AuthCredentialsRemoveCmd) Run(ctx context.Context, flags *RootFlags) er
 		return confirmErr
 	}
 
-	if deleteErr := oauthclient.DeleteClientCredentialsFor(client); deleteErr != nil {
+	credentialStore, err := commandOAuthCredentialsStore(ctx)
+	if err != nil {
+		return err
+	}
+	if deleteErr := credentialStore.Delete(client); deleteErr != nil {
 		return deleteErr
 	}
 
@@ -230,7 +258,7 @@ func (c *AuthCredentialsRemoveCmd) Run(ctx context.Context, flags *RootFlags) er
 	if err != nil {
 		return err
 	}
-	domainsRemoved, err := removeDomainMappings(client)
+	domainsRemoved, err := removeDomainMappings(ctx, client)
 	if err != nil {
 		return err
 	}
@@ -244,7 +272,11 @@ func (c *AuthCredentialsRemoveCmd) Run(ctx context.Context, flags *RootFlags) er
 }
 
 func (c *AuthCredentialsRemoveCmd) removeAll(ctx context.Context, flags *RootFlags, u *ui.UI) error {
-	creds, err := config.ListClientCredentials()
+	files, err := commandClientCredentialsStore(ctx)
+	if err != nil {
+		return err
+	}
+	creds, err := files.List()
 	if err != nil {
 		return err
 	}
@@ -268,14 +300,18 @@ func (c *AuthCredentialsRemoveCmd) removeAll(ctx context.Context, flags *RootFla
 	if dryRunErr := dryRunExit(ctx, flags, "auth.credentials.remove", planned); dryRunErr != nil {
 		return dryRunErr
 	}
-	if err := confirmDestructiveChecked(ctx, flagsWithoutDryRun(flags), fmt.Sprintf("remove all OAuth credentials (%s)", strings.Join(names, ", "))); err != nil {
-		return err
+	if confirmErr := confirmDestructiveChecked(ctx, flagsWithoutDryRun(flags), fmt.Sprintf("remove all OAuth credentials (%s)", strings.Join(names, ", "))); confirmErr != nil {
+		return confirmErr
 	}
 
 	var allTokens []string
 	var allDomains []string
+	credentialStore, err := commandOAuthCredentialsStore(ctx)
+	if err != nil {
+		return err
+	}
 	for _, item := range planned {
-		if err := oauthclient.DeleteClientCredentialsFor(item.Client); err != nil {
+		if err := credentialStore.Delete(item.Client); err != nil {
 			return err
 		}
 		tokens, err := removeTokensForClient(ctx, item.Client, item.TokensRemoved)
@@ -283,7 +319,7 @@ func (c *AuthCredentialsRemoveCmd) removeAll(ctx context.Context, flags *RootFla
 			return err
 		}
 		allTokens = append(allTokens, tokens...)
-		domains, err := removeDomainMappings(item.Client)
+		domains, err := removeDomainMappings(ctx, item.Client)
 		if err != nil {
 			return err
 		}
@@ -298,6 +334,37 @@ func (c *AuthCredentialsRemoveCmd) removeAll(ctx context.Context, flags *RootFla
 		kv("tokens_removed", allTokens),
 		kv("domains_removed", allDomains),
 	)
+}
+
+func commandClientCredentialsStore(ctx context.Context) (*config.ClientCredentialsStore, error) {
+	layout, err := commandLayout(ctx, config.PathKindConfig, config.PathKindData)
+	if err != nil {
+		return nil, err
+	}
+
+	return config.NewClientCredentialsStore(layout), nil
+}
+
+func commandOAuthCredentialsStore(ctx context.Context) (*oauthclient.CredentialsStore, error) {
+	layout, err := commandLayout(ctx, config.PathKindConfig, config.PathKindData)
+	if err != nil {
+		return nil, err
+	}
+	configStore, err := commandConfigStore(ctx)
+	if err != nil {
+		return nil, err
+	}
+	secretStore, err := secrets.OpenWithConfig(layout, configStore)
+	if err != nil {
+		return nil, err
+	}
+
+	return oauthclient.NewCredentialsStore(config.NewClientCredentialsStore(layout), secretStore)
+}
+
+func commandClientSecretInKeyring(ctx context.Context, client string) bool {
+	store, err := commandOAuthCredentialsStore(ctx)
+	return err == nil && store.ClientSecretInKeyring(client)
 }
 
 // accountsForClient returns emails that have tokens stored under the given client.
@@ -345,8 +412,12 @@ func removeTokensForClient(ctx context.Context, client string, emails []string) 
 }
 
 // removeDomainMappings deletes config domain entries that point to the given client.
-func removeDomainMappings(client string) ([]string, error) {
-	cfg, err := config.ReadConfig()
+func removeDomainMappings(ctx context.Context, client string) ([]string, error) {
+	configStore, err := commandConfigStore(ctx)
+	if err != nil {
+		return nil, err
+	}
+	cfg, err := configStore.Read()
 	if err != nil {
 		return nil, err
 	}
@@ -363,7 +434,7 @@ func removeDomainMappings(client string) ([]string, error) {
 	}
 	if len(removed) > 0 {
 		sort.Strings(removed)
-		if err := config.WriteConfig(cfg); err != nil {
+		if err := configStore.Write(cfg); err != nil {
 			return nil, err
 		}
 	}

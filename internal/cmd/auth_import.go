@@ -101,14 +101,18 @@ func (c *AuthImportCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return err
 	}
 	if strings.TrimSpace(override) != "" {
-		cfg, err := config.ReadConfig()
+		configStore, err := commandConfigStore(ctx)
+		if err != nil {
+			return err
+		}
+		cfg, err := configStore.Read()
 		if err != nil {
 			return err
 		}
 		if err := config.SetAccountClient(&cfg, email, client); err != nil {
 			return err
 		}
-		if err := config.WriteConfig(cfg); err != nil {
+		if err := configStore.Write(cfg); err != nil {
 			return err
 		}
 	}

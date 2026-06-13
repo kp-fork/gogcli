@@ -5,7 +5,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/steipete/gogcli/internal/config"
 	"github.com/steipete/gogcli/internal/outfmt"
 	"github.com/steipete/gogcli/internal/secrets"
 	"github.com/steipete/gogcli/internal/ui"
@@ -32,8 +31,12 @@ func (c *AuthKeyringCmd) Run(ctx context.Context, flags *RootFlags) error {
 
 	// No args: show current config.
 	if backend == "" {
-		path, _ := config.ConfigPath()
-		info, err := secrets.ResolveKeyringBackendInfo()
+		store, err := commandConfigStore(ctx)
+		if err != nil {
+			return err
+		}
+		path := store.Path()
+		info, err := secrets.ResolveKeyringBackendInfoFor(store)
 		if err != nil {
 			return err
 		}
@@ -73,20 +76,24 @@ func (c *AuthKeyringCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return usagef("invalid backend: %q (expected auto, keychain, or file)", c.Backend)
 	}
 
-	path, _ := config.ConfigPath()
-	if err := dryRunExit(ctx, flags, "auth.keyring.set", map[string]any{
-		"path":            path,
-		"keyring_backend": backend,
-	}); err != nil {
+	store, err := commandConfigStore(ctx)
+	if err != nil {
 		return err
 	}
+	path := store.Path()
+	if dryRunErr := dryRunExit(ctx, flags, "auth.keyring.set", map[string]any{
+		"path":            path,
+		"keyring_backend": backend,
+	}); dryRunErr != nil {
+		return dryRunErr
+	}
 
-	cfg, err := config.ReadConfig()
+	cfg, err := store.Read()
 	if err != nil {
 		return err
 	}
 	cfg.KeyringBackend = backend
-	if err := config.WriteConfig(cfg); err != nil {
+	if err := store.Write(cfg); err != nil {
 		return err
 	}
 

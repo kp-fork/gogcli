@@ -39,7 +39,7 @@ func fetchAuthIdentity(
 }
 
 func ensureKeychainAccessIfNeeded(ctx context.Context) error {
-	backendInfo, err := secrets.ResolveKeyringBackendInfo()
+	backendInfo, err := resolveKeyringBackendInfo(ctx)
 	if err != nil {
 		return fmt.Errorf("resolve keyring backend: %w", err)
 	}
@@ -50,6 +50,14 @@ func ensureKeychainAccessIfNeeded(ctx context.Context) error {
 		return runtime.Auth.EnsureKeychainAccess(ctx)
 	}
 	return secrets.EnsureKeychainAccessContext(ctx)
+}
+
+func resolveKeyringBackendInfo(ctx context.Context) (secrets.KeyringBackendInfo, error) {
+	store, err := commandConfigStore(ctx)
+	if err != nil {
+		return secrets.KeyringBackendInfo{}, err
+	}
+	return secrets.ResolveKeyringBackendInfoFor(store)
 }
 
 func normalizeEmail(value string) string {
