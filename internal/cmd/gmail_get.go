@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"strings"
 
+	"github.com/steipete/gogcli/internal/gmailcontent"
 	"github.com/steipete/gogcli/internal/outfmt"
 	"github.com/steipete/gogcli/internal/ui"
 )
@@ -103,7 +104,7 @@ func (c *GmailGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 			payload["unsubscribe"] = unsubscribe
 		}
 		if format == gmailFormatFull {
-			if body := bestBodyText(msg.Payload); body != "" {
+			if body := gmailcontent.BestBodyText(msg.Payload); body != "" {
 				payload["body"] = body
 			}
 		}
@@ -156,10 +157,10 @@ func (c *GmailGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 			printAttachmentLines(u.Out(), attachments)
 		}
 		if format == gmailFormatFull {
-			body := bestBodyText(msg.Payload)
+			body := gmailcontent.BestBodyText(msg.Payload)
 			if body != "" {
 				if c.SanitizeContent {
-					displayBody, isHTML := bestBodyForDisplay(msg.Payload)
+					displayBody, isHTML := gmailcontent.BestBodyForDisplay(msg.Payload)
 					body = sanitizeGmailBody(displayBody, isHTML)
 				}
 				u.Out().Println("")

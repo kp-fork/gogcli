@@ -1,51 +1,20 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
-	"encoding/base64"
 	"errors"
 	"fmt"
-	"io"
-	"mime"
-	"mime/quotedprintable"
 	"net/url"
 	"path/filepath"
-	"regexp"
 	"strings"
-	"unicode/utf8"
 
-	"golang.org/x/net/html/charset"
-	"golang.org/x/text/encoding/ianaindex"
 	"google.golang.org/api/gmail/v1"
 
 	"github.com/steipete/gogcli/internal/config"
+	"github.com/steipete/gogcli/internal/gmailcontent"
 	"github.com/steipete/gogcli/internal/outfmt"
 	"github.com/steipete/gogcli/internal/ui"
 )
-
-// HTML stripping patterns for cleaner text output.
-var (
-	// Remove script blocks entirely (including content)
-	scriptPattern = regexp.MustCompile(`(?is)<script[^>]*>.*?</script>`)
-	// Remove style blocks entirely (including content)
-	stylePattern = regexp.MustCompile(`(?is)<style[^>]*>.*?</style>`)
-	// Remove all HTML tags
-	htmlTagPattern = regexp.MustCompile(`<[^>]*>`)
-	// Collapse multiple whitespace/newlines
-	whitespacePattern = regexp.MustCompile(`\s+`)
-)
-
-func stripHTMLTags(s string) string {
-	// First remove script and style blocks entirely
-	s = scriptPattern.ReplaceAllString(s, "")
-	s = stylePattern.ReplaceAllString(s, "")
-	// Then remove remaining HTML tags
-	s = htmlTagPattern.ReplaceAllString(s, " ")
-	// Collapse whitespace
-	s = whitespacePattern.ReplaceAllString(s, " ")
-	return strings.TrimSpace(s)
-}
 
 type GmailThreadCmd struct {
 	Get         GmailThreadGetCmd         `cmd:"" name:"get" aliases:"info,show" default:"withargs" help:"Get a thread with all messages (optionally download attachments)"`
@@ -149,14 +118,13 @@ func (c *GmailThreadGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 		u.Out().Linef("Date: %s", header("Date"))
 		u.Out().Println("")
 
-		body, isHTML := bestBodyForDisplay(msg.Payload)
+		body, isHTML := gmailcontent.BestBodyForDisplay(msg.Payload)
 		if body != "" {
 			cleanBody := body
 			if c.SanitizeContent {
 				cleanBody = sanitizeGmailBody(body, isHTML)
 			} else if isHTML {
-				// Strip HTML tags for cleaner text output
-				cleanBody = stripHTMLTags(body)
+				cleanBody = gmailcontent.StripHTMLTags(body)
 			}
 			// Limit body preview to avoid overwhelming output
 			// Use runes to avoid breaking multi-byte UTF-8 characters
@@ -378,335 +346,6 @@ func (c *GmailURLCmd) Run(ctx context.Context, flags *RootFlags) error {
 		u.Out().Linef("%s\t%s", id, threadURL)
 	}
 	return nil
-}
-
-func bestBodyText(p *gmail.MessagePart) string {
-	if p == nil {
-		return ""
-	}
-	plain := findPartBody(p, "text/plain")
-	if plain != "" {
-		return plain
-	}
-	html := findPartBody(p, "text/html")
-	return html
-}
-
-func bestBodyHTML(p *gmail.MessagePart) string {
-	if p == nil {
-		return ""
-	}
-	html := findPartBody(p, "text/html")
-	if html != "" {
-		return html
-	}
-	plain := findPartBody(p, "text/plain")
-	return plain
-}
-
-func bestBodyForDisplay(p *gmail.MessagePart) (string, bool) {
-	if p == nil {
-		return "", false
-	}
-	plain := findPartBody(p, "text/plain")
-	if plain != "" {
-		if looksLikeHTML(plain) {
-			return plain, true
-		}
-		return plain, false
-	}
-	html := findPartBody(p, "text/html")
-	if html == "" {
-		return "", false
-	}
-	return html, true
-}
-
-func findPartBody(p *gmail.MessagePart, mimeType string) string {
-	if p == nil {
-		return ""
-	}
-	if mimeTypeMatches(p.MimeType, mimeType) && p.Body != nil && p.Body.Data != "" {
-		s, err := decodePartBody(p)
-		if err == nil {
-			return s
-		}
-	}
-	for _, part := range p.Parts {
-		if s := findPartBody(part, mimeType); s != "" {
-			return s
-		}
-	}
-	return ""
-}
-
-func mimeTypeMatches(partType string, want string) bool {
-	return normalizeMimeType(partType) == normalizeMimeType(want)
-}
-
-func normalizeMimeType(value string) string {
-	value = strings.TrimSpace(strings.ToLower(value))
-	if value == "" {
-		return ""
-	}
-	mediaType, _, err := mime.ParseMediaType(value)
-	if err == nil && mediaType != "" {
-		return strings.ToLower(mediaType)
-	}
-	if idx := strings.Index(value, ";"); idx != -1 {
-		return strings.TrimSpace(value[:idx])
-	}
-	return value
-}
-
-func looksLikeHTML(value string) bool {
-	trimmed := strings.TrimSpace(strings.ToLower(value))
-	if trimmed == "" {
-		return false
-	}
-	return strings.HasPrefix(trimmed, "<!doctype") ||
-		strings.HasPrefix(trimmed, "<html") ||
-		strings.HasPrefix(trimmed, "<head") ||
-		strings.HasPrefix(trimmed, "<body") ||
-		strings.HasPrefix(trimmed, "<meta") ||
-		strings.Contains(trimmed, "<html")
-}
-
-func decodePartBody(p *gmail.MessagePart) (string, error) {
-	if p == nil || p.Body == nil || p.Body.Data == "" {
-		return "", nil
-	}
-	raw, err := decodeBase64URLBytes(p.Body.Data)
-	if err != nil {
-		return "", err
-	}
-
-	decoded := raw
-	if cte := strings.TrimSpace(headerValue(p, "Content-Transfer-Encoding")); cte != "" {
-		decoded = decodeTransferEncoding(decoded, cte)
-	}
-
-	contentType := strings.TrimSpace(headerValue(p, "Content-Type"))
-	if contentType == "" {
-		contentType = strings.TrimSpace(p.MimeType)
-	}
-	if contentType != "" {
-		decoded = decodeBodyCharset(decoded, contentType)
-	}
-
-	return string(decoded), nil
-}
-
-func decodeTransferEncoding(data []byte, encoding string) []byte {
-	switch strings.ToLower(strings.TrimSpace(encoding)) {
-	case "base64":
-		if !looksLikeBase64(data) {
-			return data
-		}
-		if decoded, err := decodeAnyBase64(data); err == nil {
-			return decoded
-		}
-	case "quoted-printable":
-		if !looksLikeQuotedPrintable(data) {
-			return data
-		}
-		if decoded, err := io.ReadAll(quotedprintable.NewReader(bytes.NewReader(data))); err == nil {
-			return decoded
-		}
-	}
-	return data
-}
-
-func decodeBodyCharset(data []byte, contentType string) []byte {
-	charsetLabel := charsetLabelFromContentType(contentType)
-	normalized := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(charsetLabel), "_", "-"))
-	if charsetLabel == "" || normalized == "utf-8" || normalized == "utf8" {
-		return data
-	}
-	// The Gmail API may normalize body.data to UTF-8 before base64url-encoding,
-	// while preserving the original MIME charset header. If bytes are already
-	// valid UTF-8, avoid re-decoding them as the stale charset. ISO-2022 payloads
-	// are the main exception: encoded Japanese text is ASCII-valid but contains
-	// ESC shift sequences that still need charset decoding.
-	if utf8.Valid(data) && (!strings.HasPrefix(normalized, "iso-2022-") || !bytes.ContainsRune(data, '\x1b')) {
-		return data
-	}
-	if decoded, ok := decodeWithCharsetLabel(data, charsetLabel); ok {
-		return decoded
-	}
-	return data
-}
-
-func charsetLabelFromContentType(contentType string) string {
-	_, params, err := mime.ParseMediaType(contentType)
-	if err == nil {
-		if label := strings.TrimSpace(params["charset"]); label != "" {
-			return label
-		}
-	}
-	lower := strings.ToLower(contentType)
-	idx := strings.Index(lower, "charset=")
-	if idx == -1 {
-		return ""
-	}
-	label := contentType[idx+len("charset="):]
-	label = strings.TrimLeft(label, " \t")
-	if cut := strings.IndexAny(label, "; \t"); cut != -1 {
-		label = label[:cut]
-	}
-	return strings.Trim(label, "\"'")
-}
-
-func decodeWithCharsetLabel(data []byte, charsetLabel string) ([]byte, bool) {
-	label := strings.TrimSpace(charsetLabel)
-	if label == "" {
-		return nil, false
-	}
-	if decoded, ok := decodeWithEncodingIndex(data, label); ok {
-		return decoded, true
-	}
-	if strings.Contains(label, "_") {
-		alt := strings.ReplaceAll(label, "_", "-")
-		if decoded, ok := decodeWithEncodingIndex(data, alt); ok {
-			return decoded, true
-		}
-	}
-	return nil, false
-}
-
-func decodeWithEncodingIndex(data []byte, charsetLabel string) ([]byte, bool) {
-	if enc, err := ianaindex.MIME.Encoding(charsetLabel); err == nil && enc != nil {
-		if decoded, err := enc.NewDecoder().Bytes(data); err == nil {
-			return decoded, true
-		}
-	}
-	reader, err := charset.NewReaderLabel(charsetLabel, bytes.NewReader(data))
-	if err != nil {
-		return nil, false
-	}
-	decoded, err := io.ReadAll(reader)
-	if err != nil {
-		return nil, false
-	}
-	return decoded, true
-}
-
-func looksLikeBase64(data []byte) bool {
-	trimmed := bytes.TrimSpace(data)
-	if len(trimmed) == 0 {
-		return false
-	}
-	for _, b := range trimmed {
-		switch {
-		case b >= 'A' && b <= 'Z':
-		case b >= 'a' && b <= 'z':
-		case b >= '0' && b <= '9':
-		case b == '+', b == '/', b == '=', b == '-', b == '_':
-		case b == '\n', b == '\r', b == '\t', b == ' ':
-		default:
-			return false
-		}
-	}
-	return true
-}
-
-// looksLikeQuotedPrintable checks if data appears to contain quoted-printable
-// encoded sequences. This prevents double-decoding when the Gmail API has
-// already decoded the content.
-//
-// Detection strategy is intentionally conservative to avoid URL corruption:
-// 1. Soft line breaks (=\r\n or =\n)
-// 2. Escaped equals (=3D / =3d)
-// 3. Chained hex escapes (=XX=YY...), common in UTF-8 quoted-printable text
-func looksLikeQuotedPrintable(data []byte) bool {
-	for i := 0; i < len(data)-2; i++ {
-		if data[i] != '=' {
-			continue
-		}
-		// Soft line break (="\r\n" or "\n") is a definitive QP marker.
-		if data[i+1] == '\r' || data[i+1] == '\n' {
-			return true
-		}
-		if !isHexDigit(data[i+1]) || !isHexDigit(data[i+2]) {
-			continue
-		}
-		// =3D (case-insensitive) encodes literal '=' and is a strong marker.
-		if isHexPair(data[i+1], data[i+2], '3', 'D') {
-			return true
-		}
-		// Chained escapes like =E2=82=AC are common in real QP bodies.
-		if i+3 < len(data) && data[i+3] == '=' {
-			return true
-		}
-	}
-	return false
-}
-
-func isHexDigit(b byte) bool {
-	return (b >= '0' && b <= '9') || (b >= 'A' && b <= 'F') || (b >= 'a' && b <= 'f')
-}
-
-func isHexPair(a, b, hi, lo byte) bool {
-	return equalFoldHexNibble(a, hi) && equalFoldHexNibble(b, lo)
-}
-
-func equalFoldHexNibble(a, b byte) bool {
-	if a == b {
-		return true
-	}
-	if b >= 'A' && b <= 'F' {
-		return a == b+('a'-'A')
-	}
-	return false
-}
-
-func decodeAnyBase64(data []byte) ([]byte, error) {
-	cleaned := stripBase64Whitespace(data)
-	str := string(cleaned)
-	if decoded, err := base64.StdEncoding.DecodeString(str); err == nil {
-		return decoded, nil
-	}
-	if decoded, err := base64.RawStdEncoding.DecodeString(str); err == nil {
-		return decoded, nil
-	}
-	if decoded, err := base64.URLEncoding.DecodeString(str); err == nil {
-		return decoded, nil
-	}
-	return base64.RawURLEncoding.DecodeString(str)
-}
-
-func stripBase64Whitespace(data []byte) []byte {
-	out := make([]byte, 0, len(data))
-	for _, b := range data {
-		switch b {
-		case '\n', '\r', '\t', ' ':
-			continue
-		default:
-			out = append(out, b)
-		}
-	}
-	return out
-}
-
-func decodeBase64URLBytes(s string) ([]byte, error) {
-	if b, err := base64.RawURLEncoding.DecodeString(s); err == nil {
-		return b, nil
-	}
-	if b, err := base64.URLEncoding.DecodeString(s); err == nil {
-		return b, nil
-	}
-	if b, err := base64.RawStdEncoding.DecodeString(s); err == nil {
-		return b, nil
-	}
-	return base64.StdEncoding.DecodeString(s)
-}
-
-func decodeBase64URL(s string) (string, error) {
-	b, err := decodeBase64URLBytes(s)
-	if err != nil {
-		return "", err
-	}
-	return string(b), nil
 }
 
 func downloadAttachment(ctx context.Context, svc *gmail.Service, messageID string, a attachmentInfo, dir string) (string, bool, error) {

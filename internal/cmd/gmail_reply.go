@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"google.golang.org/api/gmail/v1"
+
+	"github.com/steipete/gogcli/internal/gmailcontent"
 )
 
 // buildReplyAllRecipients constructs To and Cc lists for a reply-all.
@@ -145,12 +147,12 @@ func replyInfoFromMessage(msg *gmail.Message, includeQuoteBodies bool) *replyInf
 	}
 
 	if includeQuoteBodies {
-		plain := findPartBody(msg.Payload, "text/plain")
+		plain := gmailcontent.FindPartBody(msg.Payload, "text/plain")
 		// Some messages put HTML into text/plain; never dump raw HTML into the plain quote.
-		if plain != "" && !looksLikeHTML(plain) {
+		if plain != "" && !gmailcontent.LooksLikeHTML(plain) {
 			info.Body = plain
 		}
-		info.BodyHTML = findPartBody(msg.Payload, "text/html")
+		info.BodyHTML = gmailcontent.FindPartBody(msg.Payload, "text/html")
 	}
 
 	messageID := headerValue(msg.Payload, "Message-ID")

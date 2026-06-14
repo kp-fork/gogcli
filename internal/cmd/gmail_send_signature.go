@@ -11,6 +11,7 @@ import (
 	"google.golang.org/api/gmail/v1"
 
 	"github.com/steipete/gogcli/internal/config"
+	"github.com/steipete/gogcli/internal/gmailcontent"
 )
 
 const maxComposeSignatureFileBytes = 1 << 20
@@ -82,7 +83,7 @@ func readComposeSignatureFile(path string) (composeSignature, error) {
 	if value == "" {
 		return composeSignature{}, nil
 	}
-	if looksLikeHTML(value) {
+	if gmailcontent.LooksLikeHTML(value) {
 		return composeSignature{
 			Plain: signatureHTMLToText(value),
 			HTML:  value,
@@ -116,7 +117,7 @@ func signatureHTMLToText(value string) string {
 	}
 	doc, err := nethtml.Parse(strings.NewReader(value))
 	if err != nil {
-		return stripHTMLTags(value)
+		return gmailcontent.StripHTMLTags(value)
 	}
 
 	var out strings.Builder

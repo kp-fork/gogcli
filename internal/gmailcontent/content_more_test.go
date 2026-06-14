@@ -1,10 +1,7 @@
-package cmd
+package gmailcontent
 
 import (
-	"context"
 	"encoding/base64"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"golang.org/x/text/encoding/ianaindex"
@@ -15,76 +12,17 @@ import (
 
 func TestStripHTMLTags_More(t *testing.T) {
 	input := "<div>Hello <b>World</b><script>bad()</script><style>.x{}</style></div>"
-	out := stripHTMLTags(input)
+
+	out := StripHTMLTags(input)
 	if out != "Hello World" {
 		t.Fatalf("unexpected stripped output: %q", out)
-	}
-}
-
-func TestFormatBytes(t *testing.T) {
-	if got := formatBytes(500); got != "500 B" {
-		t.Fatalf("unexpected bytes format: %q", got)
-	}
-	if got := formatBytes(2048); got != "2.0 KB" {
-		t.Fatalf("unexpected KB format: %q", got)
-	}
-	if got := formatBytes(5 * 1024 * 1024); got != "5.0 MB" {
-		t.Fatalf("unexpected MB format: %q", got)
-	}
-	if got := formatBytes(3 * 1024 * 1024 * 1024); got != "3.0 GB" {
-		t.Fatalf("unexpected GB format: %q", got)
-	}
-}
-
-func TestCollectAttachments_More(t *testing.T) {
-	part := &gmail.MessagePart{
-		Parts: []*gmail.MessagePart{
-			{
-				Filename: "file.txt",
-				MimeType: "text/plain",
-				Body: &gmail.MessagePartBody{
-					AttachmentId: "a1",
-					Size:         12,
-				},
-			},
-			{
-				Parts: []*gmail.MessagePart{
-					{
-						MimeType: "image/png",
-						Body: &gmail.MessagePartBody{
-							AttachmentId: "a2",
-							Size:         34,
-						},
-					},
-				},
-			},
-		},
-	}
-	attachments := collectAttachments(part)
-	if len(attachments) != 2 {
-		t.Fatalf("expected 2 attachments, got %d", len(attachments))
-	}
-	if attachments[0].Filename != "file.txt" || attachments[1].AttachmentID != "a2" {
-		t.Fatalf("unexpected attachments: %#v", attachments)
-	}
-}
-
-func TestAttachmentLine(t *testing.T) {
-	att := attachmentOutput{
-		Filename:     "file.txt",
-		Size:         12,
-		SizeHuman:    formatBytes(12),
-		MimeType:     "text/plain",
-		AttachmentID: "a1",
-	}
-	if got := attachmentLine(att); got != "attachment\tfile.txt\t12 B\ttext/plain\ta1" {
-		t.Fatalf("unexpected attachment line: %q", got)
 	}
 }
 
 func TestBestBodySelection(t *testing.T) {
 	plain := base64.RawURLEncoding.EncodeToString([]byte("plain"))
 	html := base64.RawURLEncoding.EncodeToString([]byte("<b>html</b>"))
+
 	part := &gmail.MessagePart{
 		Parts: []*gmail.MessagePart{
 			{
@@ -97,13 +35,15 @@ func TestBestBodySelection(t *testing.T) {
 			},
 		},
 	}
-	if got := bestBodyText(part); got != "plain" {
+	if got := BestBodyText(part); got != "plain" {
 		t.Fatalf("unexpected best body text: %q", got)
 	}
-	if got := bestBodyHTML(part); got != "<b>html</b>" {
+
+	if got := BestBodyHTML(part); got != "<b>html</b>" {
 		t.Fatalf("unexpected best body html: %q", got)
 	}
-	body, isHTML := bestBodyForDisplay(part)
+
+	body, isHTML := BestBodyForDisplay(part)
 	if body != "plain" || isHTML {
 		t.Fatalf("unexpected body display: %q html=%v", body, isHTML)
 	}
@@ -111,6 +51,7 @@ func TestBestBodySelection(t *testing.T) {
 
 func TestBestBodyHTML_FallsBackToPlain(t *testing.T) {
 	plain := base64.RawURLEncoding.EncodeToString([]byte("plain fallback"))
+
 	part := &gmail.MessagePart{
 		Parts: []*gmail.MessagePart{
 			{
@@ -119,7 +60,7 @@ func TestBestBodyHTML_FallsBackToPlain(t *testing.T) {
 			},
 		},
 	}
-	if got := bestBodyHTML(part); got != "plain fallback" {
+	if got := BestBodyHTML(part); got != "plain fallback" {
 		t.Fatalf("unexpected html fallback body: %q", got)
 	}
 }
@@ -135,7 +76,8 @@ func TestFindPartBodyHTML(t *testing.T) {
 			},
 		},
 	}
-	got := findPartBody(part, "text/html")
+
+	got := FindPartBody(part, "text/html")
 	if got != "<p>hi</p>" {
 		t.Fatalf("unexpected html body: %q", got)
 	}
@@ -151,7 +93,8 @@ func TestBestBodyForDisplay_DetectsHTMLInPlainPart(t *testing.T) {
 			},
 		},
 	}
-	body, isHTML := bestBodyForDisplay(part)
+
+	body, isHTML := BestBodyForDisplay(part)
 	if body == "" || !isHTML {
 		t.Fatalf("expected HTML detection, got body=%q html=%v", body, isHTML)
 	}
@@ -168,7 +111,8 @@ func TestFindPartBody_DecodesQuotedPrintable(t *testing.T) {
 		},
 		Body: &gmail.MessagePartBody{Data: encoded},
 	}
-	got := findPartBody(part, "text/plain")
+
+	got := FindPartBody(part, "text/plain")
 	if got != "Precio €99.99" {
 		t.Fatalf("unexpected decoded body: %q", got)
 	}
@@ -189,7 +133,8 @@ func TestFindPartBody_PreservesURLsWhenAlreadyDecoded(t *testing.T) {
 		},
 		Body: &gmail.MessagePartBody{Data: encoded},
 	}
-	got := findPartBody(part, "text/plain")
+
+	got := FindPartBody(part, "text/plain")
 	if got != url {
 		t.Fatalf("URL corrupted: expected %q, got %q", url, got)
 	}
@@ -238,7 +183,8 @@ func TestFindPartBody_DecodesBase64Transfer(t *testing.T) {
 		},
 		Body: &gmail.MessagePartBody{Data: encoded},
 	}
-	got := findPartBody(part, "text/plain")
+
+	got := FindPartBody(part, "text/plain")
 	if got != "plain body" {
 		t.Fatalf("unexpected decoded body: %q", got)
 	}
@@ -246,7 +192,8 @@ func TestFindPartBody_DecodesBase64Transfer(t *testing.T) {
 
 func TestDecodeTransferEncoding_Base64Whitespace(t *testing.T) {
 	encoded := []byte("cGxhaW4gYm9keQ==\n")
-	got := decodeTransferEncoding(encoded, "base64")
+
+	got := DecodeTransferEncoding(encoded, "base64")
 	if string(got) != "plain body" {
 		t.Fatalf("unexpected decoded body: %q", got)
 	}
@@ -254,7 +201,8 @@ func TestDecodeTransferEncoding_Base64Whitespace(t *testing.T) {
 
 func TestDecodeBodyCharset_ISO88591(t *testing.T) {
 	input := []byte{0x63, 0x61, 0x66, 0xe9} // "café" in ISO-8859-1
-	got := decodeBodyCharset(input, "text/plain; charset=iso-8859-1")
+
+	got := DecodeBodyCharset(input, "text/plain; charset=iso-8859-1")
 	if string(got) != "café" {
 		t.Fatalf("unexpected decoded charset: %q", string(got))
 	}
@@ -262,11 +210,13 @@ func TestDecodeBodyCharset_ISO88591(t *testing.T) {
 
 func TestDecodeBodyCharset_ISO2022JP(t *testing.T) {
 	source := "\u65e5\u672c\u8a9e\u30c6\u30b9\u30c8"
+
 	encoded, err := japanese.ISO2022JP.NewEncoder().Bytes([]byte(source))
 	if err != nil {
 		t.Fatalf("encode iso-2022-jp: %v", err)
 	}
-	got := decodeBodyCharset(encoded, "text/plain; charset=iso-2022-jp")
+
+	got := DecodeBodyCharset(encoded, "text/plain; charset=iso-2022-jp")
 	if string(got) != source {
 		t.Fatalf("unexpected decoded charset: %q", string(got))
 	}
@@ -275,11 +225,13 @@ func TestDecodeBodyCharset_ISO2022JP(t *testing.T) {
 func TestDecodeBodyCharset_ISO2022JP_MixedASCIIAndJapanese(t *testing.T) {
 	// Test mixed ASCII and Japanese text (e.g., "Hello こんにちは World")
 	source := "Hello \u3053\u3093\u306b\u3061\u306f World"
+
 	encoded, err := japanese.ISO2022JP.NewEncoder().Bytes([]byte(source))
 	if err != nil {
 		t.Fatalf("encode iso-2022-jp: %v", err)
 	}
-	got := decodeBodyCharset(encoded, "text/plain; charset=iso-2022-jp")
+
+	got := DecodeBodyCharset(encoded, "text/plain; charset=iso-2022-jp")
 	if string(got) != source {
 		t.Fatalf("unexpected decoded charset: expected %q, got %q", source, string(got))
 	}
@@ -287,7 +239,8 @@ func TestDecodeBodyCharset_ISO2022JP_MixedASCIIAndJapanese(t *testing.T) {
 
 func TestDecodeBodyCharset_AlreadyUTF8WithStaleISO2022JPHeader(t *testing.T) {
 	source := "Hello \u3053\u3093\u306b\u3061\u306f World"
-	got := decodeBodyCharset([]byte(source), "text/plain; charset=iso-2022-jp")
+
+	got := DecodeBodyCharset([]byte(source), "text/plain; charset=iso-2022-jp")
 	if string(got) != source {
 		t.Fatalf("unexpected decoded charset: expected %q, got %q", source, string(got))
 	}
@@ -295,7 +248,7 @@ func TestDecodeBodyCharset_AlreadyUTF8WithStaleISO2022JPHeader(t *testing.T) {
 
 func TestDecodeBodyCharset_ISO2022JP_EmptyContent(t *testing.T) {
 	// Test empty content with ISO-2022-JP charset header
-	got := decodeBodyCharset([]byte{}, "text/plain; charset=iso-2022-jp")
+	got := DecodeBodyCharset([]byte{}, "text/plain; charset=iso-2022-jp")
 	if len(got) != 0 {
 		t.Fatalf("expected empty result for empty input, got %q", string(got))
 	}
@@ -306,7 +259,7 @@ func TestDecodeBodyCharset_ISO2022JP_MalformedSequence(t *testing.T) {
 	// ISO-2022-JP uses escape sequences like ESC $ B for switching to JIS X 0208
 	// This creates an invalid sequence: starts escape but doesn't complete properly
 	malformed := []byte{0x1b, 0x24, 0x42, 0xff, 0xfe, 0x1b, 0x28, 0x42} // ESC $ B + invalid bytes + ESC ( B
-	got := decodeBodyCharset(malformed, "text/plain; charset=iso-2022-jp")
+	got := DecodeBodyCharset(malformed, "text/plain; charset=iso-2022-jp")
 	// The decoder should either return the original malformed data or a decoded version
 	// (graceful degradation means it shouldn't panic or error)
 	if got == nil {
@@ -318,7 +271,7 @@ func TestDecodeBodyCharset_ISO2022JP_TruncatedEscapeSequence(t *testing.T) {
 	// Test truncated escape sequence - incomplete ISO-2022-JP escape
 	// ESC $ without the final byte is incomplete
 	truncated := []byte{0x1b, 0x24}
-	got := decodeBodyCharset(truncated, "text/plain; charset=iso-2022-jp")
+	got := DecodeBodyCharset(truncated, "text/plain; charset=iso-2022-jp")
 	// Should gracefully handle and return something (original or partial decode)
 	if got == nil {
 		t.Fatalf("expected non-nil result for truncated escape sequence")
@@ -327,15 +280,18 @@ func TestDecodeBodyCharset_ISO2022JP_TruncatedEscapeSequence(t *testing.T) {
 
 func TestDecodeBodyCharset_GBK(t *testing.T) {
 	source := "您的阿里云账户已欠费即将停服提醒"
+
 	enc, err := ianaindex.MIME.Encoding("gbk")
 	if err != nil || enc == nil {
 		t.Fatalf("lookup gbk encoding: %v", err)
 	}
+
 	encoded, err := enc.NewEncoder().Bytes([]byte(source))
 	if err != nil {
 		t.Fatalf("encode gbk: %v", err)
 	}
-	got := decodeBodyCharset(encoded, "text/plain; charset=gbk")
+
+	got := DecodeBodyCharset(encoded, "text/plain; charset=gbk")
 	if string(got) != source {
 		t.Fatalf("unexpected decoded charset: expected %q, got %q", source, string(got))
 	}
@@ -343,6 +299,7 @@ func TestDecodeBodyCharset_GBK(t *testing.T) {
 
 func TestFindPartBody_UsesMimeTypeCharsetWhenHeaderMissing(t *testing.T) {
 	source := "您的阿里云账户已欠费即将停服提醒"
+
 	encodedBody, err := simplifiedchinese.GBK.NewEncoder().Bytes([]byte(source))
 	if err != nil {
 		t.Fatalf("encode gb2312: %v", err)
@@ -353,7 +310,8 @@ func TestFindPartBody_UsesMimeTypeCharsetWhenHeaderMissing(t *testing.T) {
 			Data: base64.RawURLEncoding.EncodeToString(encodedBody),
 		},
 	}
-	got := findPartBody(part, "text/plain")
+
+	got := FindPartBody(part, "text/plain")
 	if got != source {
 		t.Fatalf("unexpected decoded body: expected %q, got %q", source, got)
 	}
@@ -363,12 +321,15 @@ func TestMimeTypeMatches(t *testing.T) {
 	if !mimeTypeMatches("Text/Plain; charset=UTF-8", "text/plain") {
 		t.Fatalf("expected mime match")
 	}
+
 	if mimeTypeMatches("application/json", "text/plain") {
 		t.Fatalf("unexpected mime match")
 	}
+
 	if normalizeMimeType("text/plain; charset=utf-8") != "text/plain" {
 		t.Fatalf("unexpected normalized mime type")
 	}
+
 	if normalizeMimeType("") != "" {
 		t.Fatalf("expected empty normalized mime type")
 	}
@@ -376,37 +337,31 @@ func TestMimeTypeMatches(t *testing.T) {
 
 func TestDecodeBase64URL_Padded(t *testing.T) {
 	encoded := base64.URLEncoding.EncodeToString([]byte("hello"))
+
 	decoded, err := decodeBase64URL(encoded)
 	if err != nil {
 		t.Fatalf("decodeBase64URL: %v", err)
 	}
+
 	if decoded != "hello" {
 		t.Fatalf("unexpected decode: %q", decoded)
 	}
 }
 
-func TestDownloadAttachment_Cached(t *testing.T) {
-	dir := t.TempDir()
-	messageID := "msg1"
-	attachmentID := "att123456"
-	filename := "file.txt"
-	shortID := attachmentID[:8]
-	outPath := filepath.Join(dir, messageID+"_"+shortID+"_"+filename)
-
-	if err := os.WriteFile(outPath, []byte("abc"), 0o600); err != nil {
-		t.Fatalf("write file: %v", err)
+func TestContentHelpersNilAndMalformedMIME(t *testing.T) {
+	if BestBodyText(nil) != "" {
+		t.Fatalf("expected empty body")
 	}
 
-	info := attachmentInfo{
-		Filename:     filename,
-		AttachmentID: attachmentID,
-		Size:         3,
+	if body, isHTML := BestBodyForDisplay(nil); body != "" || isHTML {
+		t.Fatalf("expected empty display body")
 	}
-	gotPath, cached, err := downloadAttachment(context.Background(), nil, messageID, info, dir)
-	if err != nil {
-		t.Fatalf("downloadAttachment: %v", err)
+
+	if got := FindPartBody(nil, "text/plain"); got != "" {
+		t.Fatalf("expected empty part body")
 	}
-	if !cached || gotPath != outPath {
-		t.Fatalf("expected cached path %q, got %q cached=%v", outPath, gotPath, cached)
+
+	if got := normalizeMimeType("text/plain; charset=\""); got != "text/plain" {
+		t.Fatalf("unexpected normalized MIME type: %q", got)
 	}
 }

@@ -7,10 +7,13 @@ import (
 
 	"golang.org/x/net/html"
 	"google.golang.org/api/gmail/v1"
+
+	"github.com/steipete/gogcli/internal/gmailcontent"
 )
 
 var (
 	sanitizeURLPattern = regexp.MustCompile(`https?://[^\s<>"'` + "`" + `\]\)]+`)
+	sanitizeWhitespace = regexp.MustCompile(`\s+`)
 	sanitizeBlockTags  = map[string]bool{
 		"article": true, "blockquote": true, "br": true, "dd": true, "div": true,
 		"dl": true, "dt": true, "footer": true, "h1": true, "h2": true,
@@ -51,7 +54,7 @@ func sanitizeGmailBody(body string, isHTML bool) string {
 		text = extractSanitizedHTMLText(text)
 	}
 	text = sanitizeGmailText(text)
-	text = whitespacePattern.ReplaceAllString(text, " ")
+	text = sanitizeWhitespace.ReplaceAllString(text, " ")
 	return strings.TrimSpace(text)
 }
 
@@ -62,7 +65,7 @@ func extractSanitizedHTMLText(value string) string {
 	for {
 		switch tokenizer.Next() {
 		case html.ErrorToken:
-			text := whitespacePattern.ReplaceAllString(out.String(), " ")
+			text := sanitizeWhitespace.ReplaceAllString(out.String(), " ")
 			return strings.TrimSpace(text)
 		case html.StartTagToken, html.SelfClosingTagToken:
 			name, _ := tokenizer.TagName()
@@ -125,7 +128,7 @@ func sanitizedGmailMessage(msg *gmail.Message, includeBody bool) gmailSanitizedM
 		Attachments:  attachmentOutputs(collectAttachments(msg.Payload)),
 	}
 	if includeBody {
-		body, isHTML := bestBodyForDisplay(msg.Payload)
+		body, isHTML := gmailcontent.BestBodyForDisplay(msg.Payload)
 		out.Body = sanitizeGmailBody(body, isHTML)
 	}
 	return out

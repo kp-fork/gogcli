@@ -7,6 +7,7 @@ import (
 	"net/mail"
 	"strings"
 
+	"github.com/steipete/gogcli/internal/gmailcontent"
 	"github.com/steipete/gogcli/internal/mailmime"
 	"github.com/steipete/gogcli/internal/ui"
 )
@@ -73,8 +74,8 @@ func (c *GmailForwardCmd) Run(ctx context.Context, flags *RootFlags) error {
 	origCc := headerValue(origMsg.Payload, "Cc")
 	origDate := headerValue(origMsg.Payload, "Date")
 	origSubject := headerValue(origMsg.Payload, "Subject")
-	origPlain := findPartBody(origMsg.Payload, "text/plain")
-	origHTML := findPartBody(origMsg.Payload, "text/html")
+	origPlain := gmailcontent.FindPartBody(origMsg.Payload, "text/plain")
+	origHTML := gmailcontent.FindPartBody(origMsg.Payload, "text/html")
 
 	// Build forward subject (avoid stacking prefixes).
 	fwdSubject := buildForwardSubject(origSubject)

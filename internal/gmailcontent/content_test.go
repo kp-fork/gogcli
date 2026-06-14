@@ -1,4 +1,4 @@
-package cmd
+package gmailcontent
 
 import (
 	"encoding/base64"
@@ -7,63 +7,30 @@ import (
 	"google.golang.org/api/gmail/v1"
 )
 
-func TestCollectAttachments(t *testing.T) {
-	p := &gmail.MessagePart{
-		Parts: []*gmail.MessagePart{
-			{
-				Filename: "a.txt",
-				MimeType: "text/plain",
-				Body:     &gmail.MessagePartBody{AttachmentId: "att1", Size: 123},
-			},
-			{
-				MimeType: "image/png",
-				Body:     &gmail.MessagePartBody{AttachmentId: "att-inline", Size: 42},
-			},
-			{
-				Parts: []*gmail.MessagePart{
-					{
-						Filename: "b.pdf",
-						MimeType: "application/pdf",
-						Body:     &gmail.MessagePartBody{AttachmentId: "att2", Size: 456},
-					},
-				},
-			},
-		},
-	}
-	atts := collectAttachments(p)
-	if len(atts) != 3 {
-		t.Fatalf("unexpected: %#v", atts)
-	}
-	if atts[0].AttachmentID == "" || atts[1].AttachmentID == "" {
-		t.Fatalf("missing attachment ids: %#v", atts)
-	}
-	if atts[1].Filename != "attachment" {
-		t.Fatalf("expected fallback filename, got: %#v", atts[1])
-	}
-}
-
 func TestBestBodyTextPrefersPlain(t *testing.T) {
 	plain := base64.RawURLEncoding.EncodeToString([]byte("plain"))
 	html := base64.RawURLEncoding.EncodeToString([]byte("<b>html</b>"))
+
 	p := &gmail.MessagePart{
 		Parts: []*gmail.MessagePart{
 			{MimeType: "text/html", Body: &gmail.MessagePartBody{Data: html}},
 			{MimeType: "text/plain", Body: &gmail.MessagePartBody{Data: plain}},
 		},
 	}
-	if got := bestBodyText(p); got != "plain" {
+	if got := BestBodyText(p); got != "plain" {
 		t.Fatalf("unexpected: %q", got)
 	}
 }
 
 func TestBestBodyText_MimeTypeWithParams(t *testing.T) {
 	plain := base64.RawURLEncoding.EncodeToString([]byte("plain"))
+
 	p := &gmail.MessagePart{
 		Parts: []*gmail.MessagePart{
 			{MimeType: "text/plain; charset=\"utf-8\"", Body: &gmail.MessagePartBody{Data: plain}},
 		},
 	}
-	if got := bestBodyText(p); got != "plain" {
+	if got := BestBodyText(p); got != "plain" {
 		t.Fatalf("unexpected: %q", got)
 	}
 }
@@ -73,16 +40,20 @@ func TestDecodeBase64URL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
+
 	if got != "ok" {
 		t.Fatalf("unexpected: %q", got)
 	}
+
 	got, err = decodeBase64URL(base64.URLEncoding.EncodeToString([]byte("ok")))
 	if err != nil {
 		t.Fatalf("err padded: %v", err)
 	}
+
 	if got != "ok" {
 		t.Fatalf("unexpected padded: %q", got)
 	}
+
 	if _, err := decodeBase64URL("!!!"); err == nil {
 		t.Fatalf("expected error")
 	}
@@ -148,7 +119,7 @@ func TestStripHTMLTags(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := stripHTMLTags(tt.input)
+			got := StripHTMLTags(tt.input)
 			if got != tt.want {
 				t.Errorf("stripHTMLTags(%q) = %q, want %q", tt.input, got, tt.want)
 			}
@@ -175,7 +146,7 @@ func TestBestBodyForDisplay(t *testing.T) {
 		},
 	}
 
-	body, isHTML := bestBodyForDisplay(p)
+	body, isHTML := BestBodyForDisplay(p)
 	if body != "plain body" || isHTML {
 		t.Fatalf("expected plain body, got %q (html=%v)", body, isHTML)
 	}
@@ -186,7 +157,8 @@ func TestBestBodyForDisplay(t *testing.T) {
 			Data: encodeBase64URL("<p>html body</p>"),
 		},
 	}
-	body, isHTML = bestBodyForDisplay(htmlOnly)
+
+	body, isHTML = BestBodyForDisplay(htmlOnly)
 	if body == "" || !isHTML {
 		t.Fatalf("expected html body, got %q (html=%v)", body, isHTML)
 	}

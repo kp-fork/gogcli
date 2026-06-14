@@ -9,6 +9,7 @@ import (
 
 	"google.golang.org/api/gmail/v1"
 
+	"github.com/steipete/gogcli/internal/gmailcontent"
 	"github.com/steipete/gogcli/internal/outfmt"
 	"github.com/steipete/gogcli/internal/ui"
 )
@@ -257,9 +258,9 @@ func fetchMessageDetails(ctx context.Context, svc *gmail.Service, messages []*gm
 			item.Date = formatGmailDateInLocation(headerValue(msg.Payload, "Date"), loc)
 			if includeBody {
 				if preferHTML {
-					item.Body = bestBodyHTML(msg.Payload)
+					item.Body = gmailcontent.BestBodyHTML(msg.Payload)
 				} else {
-					item.Body = bestBodyText(msg.Payload)
+					item.Body = gmailcontent.BestBodyText(msg.Payload)
 				}
 				item.Attachments = attachmentOutputs(collectAttachments(msg.Payload))
 			}
@@ -314,8 +315,8 @@ func sanitizeMessageBody(body string, full bool) string {
 	if body == "" {
 		return ""
 	}
-	if looksLikeHTML(body) {
-		body = stripHTMLTags(body)
+	if gmailcontent.LooksLikeHTML(body) {
+		body = gmailcontent.StripHTMLTags(body)
 	}
 	body = strings.ReplaceAll(body, "\t", " ")
 	body = strings.ReplaceAll(body, "\n", " ")

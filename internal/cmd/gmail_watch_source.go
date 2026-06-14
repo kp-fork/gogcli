@@ -7,6 +7,7 @@ import (
 
 	"google.golang.org/api/gmail/v1"
 
+	"github.com/steipete/gogcli/internal/gmailcontent"
 	"github.com/steipete/gogcli/internal/gmailwatch"
 )
 
@@ -112,7 +113,7 @@ func (s *gmailWatchSource) FetchMessages(ctx context.Context, ids []string) (gma
 			Labels:   message.LabelIds,
 		}
 		if s.includeBody {
-			body := bestBodyText(message.Payload)
+			body := gmailcontent.BestBodyText(message.Payload)
 			item.Body, item.BodyTruncated = truncateUTF8Bytes(body, s.maxBodyBytes)
 		}
 		batch.Messages = append(batch.Messages, item)

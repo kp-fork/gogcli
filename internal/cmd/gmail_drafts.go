@@ -10,6 +10,7 @@ import (
 	"google.golang.org/api/gmail/v1"
 
 	"github.com/steipete/gogcli/internal/config"
+	"github.com/steipete/gogcli/internal/gmailcontent"
 	"github.com/steipete/gogcli/internal/mailmime"
 	"github.com/steipete/gogcli/internal/outfmt"
 	"github.com/steipete/gogcli/internal/ui"
@@ -159,7 +160,7 @@ func (c *GmailDraftsGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 	u.Out().Linef("Subject: %s", headerValue(msg.Payload, "Subject"))
 	u.Out().Println("")
 
-	body := bestBodyText(msg.Payload)
+	body := gmailcontent.BestBodyText(msg.Payload)
 	if body != "" {
 		u.Out().Println(body)
 		u.Out().Println("")
@@ -369,7 +370,7 @@ func carryForwardDraftAttachments(ctx context.Context, svc *gmail.Service, messa
 			case filename != "" && (part.Body.Data != "" || part.Body.Size == 0):
 				var data []byte
 				if part.Body.Data != "" {
-					decoded, decErr := decodeBase64URLBytes(part.Body.Data)
+					decoded, decErr := gmailcontent.DecodeBase64URLBytes(part.Body.Data)
 					if decErr != nil {
 						return fmt.Errorf("preserve attachment %q: %w", filename, decErr)
 					}
@@ -410,7 +411,7 @@ func fetchDraftAttachmentBytes(ctx context.Context, svc *gmail.Service, messageI
 		}
 		return nil, errors.New("empty attachment data")
 	}
-	return decodeBase64URLBytes(body.Data)
+	return gmailcontent.DecodeBase64URLBytes(body.Data)
 }
 
 func writeDraftResult(ctx context.Context, u *ui.UI, draft *gmail.Draft, threadID string, attachments []mailmime.AttachmentMetadata) error {

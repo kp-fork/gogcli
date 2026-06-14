@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/steipete/gogcli/internal/backup"
+	"github.com/steipete/gogcli/internal/gmailcontent"
 )
 
 type gmailExportIndexEntry struct {
@@ -230,14 +231,14 @@ func backupEmailMarkdownText(value string) string {
 	if value == "" {
 		return ""
 	}
-	if looksLikeHTML(value) || looksLikeHTMLFragment(value) {
+	if gmailcontent.LooksLikeHTML(value) || looksLikeHTMLFragment(value) {
 		return cleanBackupHTMLBody(value)
 	}
 	return value
 }
 
 func cleanBackupHTMLBody(value string) string {
-	cleaned := stdhtml.UnescapeString(stripHTMLTags(value))
+	cleaned := stdhtml.UnescapeString(gmailcontent.StripHTMLTags(value))
 	return strings.Join(strings.Fields(cleaned), " ")
 }
 
@@ -363,7 +364,7 @@ func parseBackupEmailEntity(body []byte, contentType, transferEncoding string, o
 			partContentType := part.Header.Get("Content-Type")
 			partEncoding := part.Header.Get("Content-Transfer-Encoding")
 			if isBackupEmailAttachment(part.Header.Get("Content-Disposition"), partContentType) {
-				decoded := decodeTransferEncoding(partBody, partEncoding)
+				decoded := gmailcontent.DecodeTransferEncoding(partBody, partEncoding)
 				filename := backupAttachmentFilename(part.Header.Get("Content-Disposition"), partContentType)
 				out.Attachments = append(out.Attachments, backupEmailAttachment{
 					Filename: filename,
@@ -377,8 +378,8 @@ func parseBackupEmailEntity(body []byte, contentType, transferEncoding string, o
 		}
 		return nil
 	}
-	decoded := decodeTransferEncoding(body, transferEncoding)
-	decoded = decodeBodyCharset(decoded, contentType)
+	decoded := gmailcontent.DecodeTransferEncoding(body, transferEncoding)
+	decoded = gmailcontent.DecodeBodyCharset(decoded, contentType)
 	switch mediaType {
 	case mimeTextPlain:
 		if strings.TrimSpace(out.TextBody) == "" {
