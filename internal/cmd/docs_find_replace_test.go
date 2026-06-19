@@ -746,61 +746,40 @@ func TestDocsFindReplace_MarkdownReplaceAll_DoesNotLoopOnSelfMatch(t *testing.T)
 	}
 }
 
-func TestDocsFindReplace_MarkdownWithImage(t *testing.T) {
-	origToken := imgPlaceholderToken
-	t.Cleanup(func() { imgPlaceholderToken = origToken })
-	imgPlaceholderToken = func() string { return "test" }
-
-	var batchCalls []docs.BatchUpdateDocumentRequest
-	callCount := 0
-	docSvc, cleanup := newDocsServiceForTest(t, func(w http.ResponseWriter, r *http.Request) {
+func newDocsFindReplaceImageTestService(t *testing.T) (*docs.Service, *[]docs.BatchUpdateDocumentRequest) {
+	t.Helper()
+	batchCalls := &[]docs.BatchUpdateDocumentRequest{}
+	getCount := 0
+	docSvc, _ := newDocsServiceForTest(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
 		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/v1/documents/"):
-			callCount++
-			if callCount == 1 {
-				// First GET: return doc with the placeholder text.
-				_ = json.NewEncoder(w).Encode(docBodyWithText("Replace {{img}} here"))
-			} else {
-				// Second GET (read-back after insert): doc now has <<IMG_test_0>> placeholder.
-				_ = json.NewEncoder(w).Encode(map[string]any{
-					"documentId": "doc1",
-					"body": map[string]any{
-						"content": []any{
-							map[string]any{
-								"startIndex":   0,
-								"endIndex":     1,
-								"sectionBreak": map[string]any{"sectionStyle": map[string]any{}},
-							},
-							map[string]any{
-								"startIndex": 1,
-								"endIndex":   30,
-								"paragraph": map[string]any{
-									"elements": []any{
-										map[string]any{
-											"startIndex": 1,
-											"endIndex":   30,
-											"textRun":    map[string]any{"content": "Replace <<IMG_test_0>> here\n"},
-										},
-									},
-								},
-							},
-						},
-					},
-				})
+			getCount++
+			body := docBodyWithText("Replace {{img}} here")
+			if getCount > 1 {
+				body = docBodyWithText("Replace <<IMG_test_0>> here\n")
 			}
+			_ = json.NewEncoder(w).Encode(body)
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, ":batchUpdate"):
-			var req docs.BatchUpdateDocumentRequest
-			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			var request docs.BatchUpdateDocumentRequest
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 				t.Fatalf("decode batchUpdate: %v", err)
 			}
-			batchCalls = append(batchCalls, req)
+			*batchCalls = append(*batchCalls, request)
 			_ = json.NewEncoder(w).Encode(map[string]any{"documentId": "doc1"})
 		default:
 			http.NotFound(w, r)
 		}
 	})
-	defer cleanup()
+	return docSvc, batchCalls
+}
+
+func TestDocsFindReplace_MarkdownWithImage(t *testing.T) {
+	origToken := imgPlaceholderToken
+	t.Cleanup(func() { imgPlaceholderToken = origToken })
+	imgPlaceholderToken = func() string { return "test" }
+
+	docSvc, batchCalls := newDocsFindReplaceImageTestService(t)
 
 	flags := &RootFlags{Account: "a@b.com"}
 	cmd := &DocsFindReplaceCmd{}
@@ -817,12 +796,12 @@ func TestDocsFindReplace_MarkdownWithImage(t *testing.T) {
 	// 1. Delete placeholder + insert text (with <<IMG_test_0>>)
 	// 2. Delete <<IMG_test_0>> + InsertInlineImage
 	// 3. Cleanup ReplaceAllText (belt and suspenders)
-	if len(batchCalls) < 2 {
-		t.Fatalf("expected at least 2 batchUpdate calls, got %d", len(batchCalls))
+	if len(*batchCalls) < 2 {
+		t.Fatalf("expected at least 2 batchUpdate calls, got %d", len(*batchCalls))
 	}
 
 	// Second call should contain InsertInlineImage.
-	imgCall := batchCalls[1]
+	imgCall := (*batchCalls)[1]
 	foundImage := false
 	for _, req := range imgCall.Requests {
 		if req.InsertInlineImage != nil {
@@ -942,51 +921,7 @@ func TestDocsFindReplace_MarkdownImageSuccess_StillCleansUp(t *testing.T) {
 	t.Cleanup(func() { imgPlaceholderToken = origToken })
 	imgPlaceholderToken = func() string { return "test" }
 
-	var batchCalls []docs.BatchUpdateDocumentRequest
-	getCount := 0
-	docSvc, cleanup := newDocsServiceForTest(t, func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		switch {
-		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/v1/documents/"):
-			getCount++
-			if getCount == 1 {
-				_ = json.NewEncoder(w).Encode(docBodyWithText("Replace {{img}} here"))
-			} else {
-				_ = json.NewEncoder(w).Encode(map[string]any{
-					"documentId": "doc1",
-					"body": map[string]any{
-						"content": []any{
-							map[string]any{
-								"startIndex": 0, "endIndex": 1,
-								"sectionBreak": map[string]any{"sectionStyle": map[string]any{}},
-							},
-							map[string]any{
-								"startIndex": 1, "endIndex": 20,
-								"paragraph": map[string]any{
-									"elements": []any{
-										map[string]any{
-											"startIndex": 1, "endIndex": 20,
-											"textRun": map[string]any{"content": "Replace <<IMG_test_0>> here\n"},
-										},
-									},
-								},
-							},
-						},
-					},
-				})
-			}
-		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, ":batchUpdate"):
-			var req docs.BatchUpdateDocumentRequest
-			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-				t.Fatalf("decode batchUpdate: %v", err)
-			}
-			batchCalls = append(batchCalls, req)
-			_ = json.NewEncoder(w).Encode(map[string]any{"documentId": "doc1"})
-		default:
-			http.NotFound(w, r)
-		}
-	})
-	defer cleanup()
+	docSvc, batchCalls := newDocsFindReplaceImageTestService(t)
 
 	flags := &RootFlags{Account: "a@b.com"}
 	cmd := &DocsFindReplaceCmd{}
@@ -1000,11 +935,11 @@ func TestDocsFindReplace_MarkdownImageSuccess_StillCleansUp(t *testing.T) {
 	}
 
 	// Should have 3 calls: text insert, image insert, cleanup (belt and suspenders).
-	if len(batchCalls) < 3 {
-		t.Fatalf("expected 3 batchUpdate calls (text, image, cleanup), got %d", len(batchCalls))
+	if len(*batchCalls) < 3 {
+		t.Fatalf("expected 3 batchUpdate calls (text, image, cleanup), got %d", len(*batchCalls))
 	}
 
-	cleanupCall := batchCalls[2]
+	cleanupCall := (*batchCalls)[2]
 	foundCleanup := false
 	for _, req := range cleanupCall.Requests {
 		if req.ReplaceAllText != nil &&
