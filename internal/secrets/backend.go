@@ -275,6 +275,7 @@ func openKeyringWithOptions(options OpenOptions) (keyring.Keyring, error) {
 		FileDir:                  keyringDir,
 		FilePasswordFunc:         fileKeyringPasswordFuncFrom(options.Password, options.PasswordSet, options.IsTTY),
 	}
+	keychainTrustApplication := cfg.KeychainTrustApplication
 
 	openTimeout := options.OpenTimeout
 	if openTimeout <= 0 {
@@ -300,7 +301,7 @@ func openKeyringWithOptions(options OpenOptions) (keyring.Keyring, error) {
 			return nil, timeoutErr
 		}
 
-		return prepareKeyring(timeoutRing, backendInfo, wrapFileKeys, options), nil
+		return prepareKeyring(timeoutRing, backendInfo, wrapFileKeys, keychainTrustApplication, options), nil
 	}
 
 	ring, err := open(cfg)
@@ -308,13 +309,14 @@ func openKeyringWithOptions(options OpenOptions) (keyring.Keyring, error) {
 		return nil, fmt.Errorf("open keyring: %w", err)
 	}
 
-	return prepareKeyring(ring, backendInfo, wrapFileKeys, options), nil
+	return prepareKeyring(ring, backendInfo, wrapFileKeys, keychainTrustApplication, options), nil
 }
 
 func prepareKeyring(
 	ring keyring.Keyring,
 	backendInfo KeyringBackendInfo,
 	wrapFileKeys bool,
+	keychainTrustApplication bool,
 	options OpenOptions,
 ) keyring.Keyring {
 	if wrapFileKeys || isFileKeyring(ring) {
@@ -327,6 +329,10 @@ func prepareKeyring(
 			timeout = defaultKeyringOpenTimeout(options.GOOS)
 		}
 		ring = newTimeoutKeyring(ring, timeout, keyringTimeoutHint(options.GOOS))
+	}
+
+	if options.GOOS == goosDarwin && keychainTrustApplication {
+		ring = newKeychainOwnerRemoveFallback(ring, serviceNameFor(options), nativeKeychainOwnerRemove)
 	}
 
 	return ring

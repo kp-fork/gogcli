@@ -4,7 +4,7 @@
 
 - Sheets: add `sheets filter set` for creating basic filters, with guarded replacement of an existing sheet filter. (#902)
 - Sheets: add gradient conditional formats through `--gradient-rule-json`, with strict nested color validation and rejection of unsupported alpha. (#901)
-- Auth: trust Developer-ID-signed release binaries when creating macOS Keychain items so upgrades read tokens without repeated permission prompts, while leaving ad-hoc/source builds unchanged and allowing `GOG_KEYCHAIN_TRUST_APPLICATION` overrides.
+- Auth: trust Developer-ID-signed release binaries when creating macOS Keychain items so upgrades read tokens without repeated permission prompts and preserve credential removal, while leaving ad-hoc/source builds unchanged and allowing `GOG_KEYCHAIN_TRUST_APPLICATION` overrides.
 
 ## 0.32.0 - 2026-07-03
 
