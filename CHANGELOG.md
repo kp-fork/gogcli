@@ -1,5 +1,7 @@
 # Changelog
 
+## 0.33.1 - Unreleased
+
 ## 0.33.0 - 2026-07-06
 
 - Sheets: add `sheets filter set` for creating basic filters, with guarded replacement of an existing sheet filter. (#902)
